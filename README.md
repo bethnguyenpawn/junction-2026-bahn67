@@ -44,58 +44,73 @@ Our development priorities are:
 3. Maintain reliable on-time deliveries.
 4. Build a robust system capable of handling Level 8 challenges.
 
+## 📊 Status
+
+| Level 1, same 10 weeks (`l1-a` … `l1-j`) | Margin | On time |
+|---|---|---|
+| Official starter | −€28,978 (−€2,898/week) | 93.6% |
+| **Our best so far:** fee ladder (open 0.7× typical fee, +0.3×/hour, cap 1.5×) | **+€34,186 (+€3,419/week)** | 93.2% |
+
+Details: [PROGRESS.md](PROGRESS.md) (what's done, next steps, deadlines) and [LESSONS.md](LESSONS.md) (every experiment with numbers).
+
 ## 🚀 Getting Started
-
-We are starting with **Level 1** and will progressively develop our agent through **Level 8**.
-
-### Project Structure
-
-```text
-junction-2026-bahn67/
-├── main.py          # Backend & API — Anh
-├── pricing.py       # Pricing — Otso, Linh, Bao
-├── dispatch.py      # Dispatch — Otso, Linh, Bao
-├── evaluate.py      # Testing — Entire Team
-├── config.py        # Shared configuration
-├── tests/
-└── README.md
-```
-
-### Run the Official Starter
 
 Requirements: Python 3.9 or later.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+pip install -r requirements.txt     # installs the official Spread kit
 
-pip install https://spread.bahnexpress.com/kit/spread-0.1.0-py3-none-any.whl
+cp .env.example .env                # then put the team key in .env (never commit it)
 ```
 
-Set the environment variables using your own team key:
+Our scripts read `SPREAD_URL` and `SPREAD_KEY` from `.env` automatically.
+
+### Run
 
 ```bash
-export SPREAD_URL=https://spread.bahnexpress.com
-export SPREAD_KEY="YOUR_TEAM_KEY"
+python main.py --level 1 --seed l1-a                    # play one practice week
+python evaluate.py --level 1 --seeds 10                 # benchmark on 10 fixed weeks (~2-4 min)
+python evaluate.py --level 1 --set open_mult=0.7 ladder_per_hour=0.3 --note "what I'm trying"
+python analysis/fees.py                                 # analyse the worlds of the last benchmark
 ```
 
-Run Level 1:
+- `--set name=value` overrides any parameter in `config.py` (`Params`). Defaults reproduce the official starter exactly.
+- Every `evaluate.py` run appends its settings and scores to `results/log.jsonl`. Add a row to `LESSONS.md` for each experiment.
+- Do **not** play ranking runs (`board: true`) without agreeing as a team: each round has only 5 per level.
 
-```bash
-spread-starter --level 1
+### Project Structure
+
+```text
+junction-2026/
+├── main.py              # Runs a world: practice advance loop + final live-stream loop
+├── dispatch.py          # Desk: answers events; driver fees, fee ladder, recovery from problems
+├── pricing.py           # Quotes (list price until level 4; no quote = declined)
+├── config.py            # All tunable parameters (Params)
+├── evaluate.py          # Benchmark over fixed seeds -> results/log.jsonl
+├── analysis/fees.py     # Fee/booking analysis from reveal + events
+├── results/log.jsonl    # Log of every benchmark run
+├── docs/                # Official docs (RULES, HANDBOOK, API, ...) + our summaries
+├── tests/
+├── PROGRESS.md          # Status, next steps, deadlines
+├── LESSONS.md           # Experiment log
+└── CLAUDE.md            # Context for Claude Code sessions
 ```
 
 ### Development Roadmap
 
 - [x] Initialize GitHub repository.
 - [x] Install the official Python starter kit.
-- [x] Complete the first Level 1 simulation.
-- [ ] Implement custom pricing logic.
-- [ ] Implement custom dispatch logic.
-- [ ] Integrate algorithms with the backend.
-- [ ] Optimize Level 1 profitability.
-- [ ] Progress through Levels 2–8.
-- [ ] Test the final system and prepare submission.
+- [x] Complete the first Level 1 simulation (starter baseline).
+- [x] Split the starter into our modules (identical results).
+- [x] Benchmark harness (`evaluate.py`) and fee analysis.
+- [x] Level 1: profitable with a fee ladder (+€3,419/week).
+- [ ] Level 1: fewer late cars (long trips, deadline handling).
+- [ ] Level 2 (drivers learn fees) and Level 3 (multi-car gigs, direct offers).
+- [ ] Custom pricing from Level 4.
+- [ ] Levels 5–8, test finals (Sat 14:00, 20:00), final (Sun 08:00).
+- [ ] Prepare the final submission and presentation.
 
 ## 🤝 Collaboration
 
@@ -107,12 +122,14 @@ spread-starter --level 1
 
 ## 📚 Resources
 
-- [Challenge Overview](https://spread.bahnexpress.com/how)
+- [Challenge Overview](https://spread.bahnexpress.com/how) · [Our summary](docs/CHALLENGE_SUMMARY.md)
 - [Official Starter Kit](https://spread.bahnexpress.com/kit/)
 - [Handbook](https://spread.bahnexpress.com/handbook)
 - [API Reference](https://spread.bahnexpress.com/api)
 - [Challenge Rules](https://spread.bahnexpress.com/rules)
 - [Leaderboard](https://spread.bahnexpress.com/leaderboard)
+- [Judging & submission](https://spread.bahnexpress.com/judging)
+- [Team page](https://spread.bahnexpress.com/team) (submission hash) · [Run viewer](https://spread.bahnexpress.com/viewer/)
 
 ---
 

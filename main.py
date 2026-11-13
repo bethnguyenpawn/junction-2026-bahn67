@@ -1,1 +1,153 @@
-"""Bahn Express Agent module."""
+"""Runs our system on a world: the practice advance loop and the final's live stream loop.
+
+    python main.py --level 1 --seed l1-a [--set open_mult=0.9 ...]
+    python main.py --final
+
+Ranking runs (board) are deliberately not exposed here.
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+import time
+from typing import Optional
+
+from spread.client import Client, SpreadError, Unreachable, World
+from spread.types import Score
+
+import config
+from config import DAY, Params
+from dispatch import WAKE_ON, Desk
+
+WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def load_env(path: str = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")) -> None:
+    """Reads SPREAD_URL / SPREAD_KEY from .env when they are not already set. Never prints them."""
+    if not os.path.exists(path):
+        return
+    for line in open(path):
+        key, sep, value = line.strip().partition("=")
+        if sep and key and not key.startswith("#"):
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+def play_practice(world: World, level: int, params: Params, verbose: bool = True) -> Score:
+    """Steps the world from one event that needs an answer to the next; one request per step."""
+    snapshot = world.snapshot()
+    desk, ends_at = Desk(world, level, snapshot["now"], params), snapshot["endsAt"]
+    seen = -1
+    while desk.now < ends_at:
+        day, midnight = desk.now // DAY, (desk.now // DAY + 1) * DAY
+        actions, desk.outbox = desk.outbox, []
+        stop_at = min(ends_at, midnight)
+        if params.ladder_per_hour > 0:
+            stop_at = min(stop_at, desk.now + params.tick_min)
+        step = world.advance(until=WAKE_ON, max=stop_at, actions=actions)
+        desk.read_results(actions, step["results"])
+        desk.now = step["now"]
+        for event in step["events"]:
+            if event["seq"] <= seen:  # drop repeats after a server restart
+                continue
+            seen = event["seq"]
+            desk.handle(event)
+        desk.tick()
+        if verbose and desk.now // DAY > day:
+            report(WEEKDAYS[day % 7], world.score())
+    return world.score()
+
+
+def play_final(world: World, params: Params) -> None:
+    """Rebuilds state from the world, then answers events from the live stream."""
+    history = world.events()
+    snapshot = world.snapshot()
+    if snapshot["now"] >= snapshot["endsAt"]:
+        return
+    level = next((w["level"] for w in world.client.worlds() if w["worldId"] == world.id), 8)
+    desk = Desk(world, level, snapshot["now"], params)
+    desk.rejoin(snapshot, history)
+    desk.send()
+    for event in world.stream(after=history[-1]["seq"] if history else -1, idle=1.0):
+        day = desk.now // DAY
+        desk.now = world.client.final()["now"] if event is None else max(desk.now, event["at"])
+        if event is not None:
+            desk.handle(event)
+        desk.tick()
+        desk.send()
+        if desk.now // DAY > day:
+            report(WEEKDAYS[day % 7], world.score())
+        if desk.now >= snapshot["endsAt"]:
+            return
+
+
+def report(label: str, score: Score) -> None:
+    orders = f"{score['wonOrders']:>4} orders  {score['onTimeShare']:6.1%} on time  {score['undeliveredShare']:5.1%} not delivered"
+    print(f"{label:<9}  margin €{score['marginCents'] / 100:>11,.2f}  revenue €{score['revenueCents'] / 100:>11,.2f}  {orders}", flush=True)
+
+
+def next_final(client: Client) -> World:
+    """Waits until a final is set and not yet ended."""
+    said = False
+    while True:
+        try:
+            world: Optional[World] = client.world(client.final()["worldId"])
+        except SpreadError as error:
+            if error.status != 404:
+                raise
+            world = None
+        if world is not None:
+            snapshot = world.snapshot()
+            if snapshot["now"] < snapshot["endsAt"]:
+                return world
+        if not said:
+            print("No final is set. Waiting for it.", flush=True)
+            said = True
+        time.sleep(10)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Plays a Spread world with our system.")
+    parser.add_argument("--level", type=int, choices=range(1, 9), default=1)
+    parser.add_argument("--seed")
+    parser.add_argument("--final", action="store_true", help="play our copy of the final from the live stream")
+    parser.add_argument("--set", nargs="*", default=[], metavar="NAME=VALUE", help="override parameters from config.Params")
+    args = parser.parse_args()
+    load_env()
+    params = config.from_overrides(args.set)
+    try:
+        client = Client()
+        if args.final:
+            world = None
+            while True:  # a server restart drops connections; rebuild from the world and go on
+                try:
+                    if world is None:
+                        world = next_final(client)
+                        print(f"Final world {world.id}.", flush=True)
+                    play_final(world, params)
+                    break
+                except Unreachable as error:
+                    print(f"spread: {error}. Trying again in 5 seconds.", file=sys.stderr, flush=True)
+                    time.sleep(5)
+            score = world.score()
+        else:
+            world = client.create(level=args.level, seed=args.seed)
+            print(f"Practice world {world.id}, level {args.level}.", flush=True)
+            try:
+                score = play_practice(world, args.level, params)
+            except BaseException:
+                try:
+                    world.delete()  # free the practice slot
+                except SpreadError:
+                    pass
+                raise
+        report("End", score)
+        print("Ranked." if score["ranked"] else "Not ranked.")
+    except SpreadError as error:
+        sys.exit(f"spread: {error}")
+    except KeyboardInterrupt:
+        sys.exit("Stopped.")
+
+
+if __name__ == "__main__":
+    main()
