@@ -18,7 +18,7 @@ from spread.types import Score
 
 import config
 from config import DAY, Params
-from dispatch import WAKE_ON, Desk
+from dispatch import WAKE_ON, Desk, roads_of
 
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
@@ -36,7 +36,7 @@ def load_env(path: str = os.path.join(os.path.dirname(os.path.abspath(__file__))
 def play_practice(world: World, level: int, params: Params, verbose: bool = True) -> Score:
     """Steps the world from one event that needs an answer to the next; one request per step."""
     snapshot = world.snapshot()
-    desk, ends_at = Desk(world, level, snapshot["now"], params), snapshot["endsAt"]
+    desk, ends_at = Desk(world, level, snapshot["now"], params, roads_of(world.client)), snapshot["endsAt"]
     seen = -1
     while desk.now < ends_at:
         day, midnight = desk.now // DAY, (desk.now // DAY + 1) * DAY
@@ -65,7 +65,7 @@ def play_final(world: World, params: Params) -> None:
     if snapshot["now"] >= snapshot["endsAt"]:
         return
     level = next((w["level"] for w in world.client.worlds() if w["worldId"] == world.id), 8)
-    desk = Desk(world, level, snapshot["now"], params)
+    desk = Desk(world, level, snapshot["now"], params, roads_of(world.client))
     desk.rejoin(snapshot, history)
     desk.send()
     for event in world.stream(after=history[-1]["seq"] if history else -1, idle=1.0):
@@ -111,10 +111,11 @@ def main() -> None:
     parser.add_argument("--level", type=int, choices=range(1, 9), default=1)
     parser.add_argument("--seed")
     parser.add_argument("--final", action="store_true", help="play our copy of the final from the live stream")
+    parser.add_argument("--preset", choices=sorted(config.PRESETS), default="starter", help="named configuration from config.PRESETS")
     parser.add_argument("--set", nargs="*", default=[], metavar="NAME=VALUE", help="override parameters from config.Params")
     args = parser.parse_args()
     load_env()
-    params = config.from_overrides(args.set)
+    params = config.from_overrides(args.set, config.PRESETS[args.preset])
     try:
         client = Client()
         if args.final:

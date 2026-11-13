@@ -46,12 +46,15 @@ Our development priorities are:
 
 ## 📊 Status
 
-| Level 1, same 10 weeks (`l1-a` … `l1-j`) | Margin | On time |
-|---|---|---|
-| Official starter | −€28,978 (−€2,898/week) | 93.6% |
-| **Our best so far:** fee ladder (open 0.7× typical fee, +0.3×/hour, cap 1.5×) | **+€34,186 (+€3,419/week)** | 93.2% |
+**Level 8 (the final's level), `--preset l8`:** +€8,080/week over 20 test weeks, **every week ranked** (worst 92% on time). The official starter loses €60,442/week there and is never ranked.
 
-Details: [PROGRESS.md](PROGRESS.md) (what's done, next steps, deadlines) and [LESSONS.md](LESSONS.md) (every experiment with numbers).
+| Level 8 | 10 tuning weeks | 10 unseen weeks |
+|---|---|---|
+| Official starter | −€604,425, 0/10 ranked | — |
+| **Ours** | **+€79,155, 10/10 ranked** | **+€82,446, 10/10 ranked** |
+
+How it works (five rules): quote 1.6× list price, higher when many orders still lack a driver; decline trips over 500 km; only offer delivery options with ≥ 8 h to find a driver; open driver fees at 0.8× the typical fee.
+Details: [PROGRESS.md](PROGRESS.md) (status, next steps, deadlines) · [LESSONS.md](LESSONS.md) (every experiment with numbers).
 
 ## 🚀 Getting Started
 
@@ -70,14 +73,17 @@ Our scripts read `SPREAD_URL` and `SPREAD_KEY` from `.env` automatically.
 ### Run
 
 ```bash
-python main.py --level 1 --seed l1-a                    # play one practice week
-python evaluate.py --level 1 --seeds 10                 # benchmark on 10 fixed weeks (~2-4 min)
-python evaluate.py --level 1 --set open_mult=0.7 ladder_per_hour=0.3 --note "what I'm trying"
-python analysis/fees.py                                 # analyse the worlds of the last benchmark
+python main.py --level 8 --seed l8-a --preset l8                 # play one practice week
+python evaluate.py --level 8 --preset l8                         # benchmark on 10 fixed weeks (~2 min)
+python evaluate.py --level 8 --preset l8 --seed-prefix l8x       # same on 10 unseen weeks
+python evaluate.py --level 8 --preset l8 --set quote_mult=1.5 --note "what I'm trying"
+python analysis/orders.py --note "what I'm trying"               # which orders were late / lost money
+python main.py --final --preset l8                               # play the final (live)
+python -m unittest discover -s tests                             # offline tests (no key needed)
 ```
 
-- `--set name=value` overrides any parameter in `config.py` (`Params`). Defaults reproduce the official starter exactly.
-- Every `evaluate.py` run appends its settings and scores to `results/log.jsonl`. Add a row to `LESSONS.md` for each experiment.
+- Presets (`config.PRESETS`): `starter` (default, identical to the official starter), `l1`, `l8`. `--set name=value` overrides any `Params` field.
+- Every `evaluate.py` run appends settings and scores to `results/log.jsonl`. Add a row to `LESSONS.md` for each experiment, and check level-8 changes on both seed sets.
 - Do **not** play ranking runs (`board: true`) without agreeing as a team: each round has only 5 per level.
 
 ### Project Structure
@@ -85,14 +91,14 @@ python analysis/fees.py                                 # analyse the worlds of 
 ```text
 junction-2026/
 ├── main.py              # Runs a world: practice advance loop + final live-stream loop
-├── dispatch.py          # Desk: answers events; driver fees, fee ladder, recovery from problems
-├── pricing.py           # Quotes (list price until level 4; no quote = declined)
-├── config.py            # All tunable parameters (Params)
+├── dispatch.py          # Desk: answers events; driver fees, recovery from problems
+├── pricing.py           # Quotes: price multiplier, backlog, distance and slack filters
+├── config.py            # All tunable parameters (Params) and presets
 ├── evaluate.py          # Benchmark over fixed seeds -> results/log.jsonl
-├── analysis/fees.py     # Fee/booking analysis from reveal + events
+├── analysis/            # fees.py, orders.py: analysis of ended weeks (reveal + events)
 ├── results/log.jsonl    # Log of every benchmark run
 ├── docs/                # Official docs (RULES, HANDBOOK, API, ...) + our summaries
-├── tests/
+├── tests/               # Offline unit tests: pricing rules, fees, config
 ├── PROGRESS.md          # Status, next steps, deadlines
 ├── LESSONS.md           # Experiment log
 └── CLAUDE.md            # Context for Claude Code sessions
@@ -100,17 +106,12 @@ junction-2026/
 
 ### Development Roadmap
 
-- [x] Initialize GitHub repository.
-- [x] Install the official Python starter kit.
-- [x] Complete the first Level 1 simulation (starter baseline).
-- [x] Split the starter into our modules (identical results).
-- [x] Benchmark harness (`evaluate.py`) and fee analysis.
-- [x] Level 1: profitable with a fee ladder (+€3,419/week).
-- [ ] Level 1: fewer late cars (long trips, deadline handling).
-- [ ] Level 2 (drivers learn fees) and Level 3 (multi-car gigs, direct offers).
-- [ ] Custom pricing from Level 4.
-- [ ] Levels 5–8, test finals (Sat 14:00, 20:00), final (Sun 08:00).
-- [ ] Prepare the final submission and presentation.
+- [x] Starter split into our modules (identical results), benchmark harness, analysis scripts.
+- [x] Level 1 profitable: fee ladder (+€3,419/week vs −€2,898 for the starter).
+- [x] **Level 8 profitable and ranked on 20/20 test weeks** (+€8,080/week).
+- [ ] Test the live final loop in a test final (Sat 14:00 / 20:00).
+- [ ] Level 8: dealer trust, handling after `deadline_close`, price-war day.
+- [ ] Final (Sun 08:00), then submission by Sun 10:00 (hash, code link, 5–10 slides).
 
 ## 🤝 Collaboration
 

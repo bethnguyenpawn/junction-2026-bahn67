@@ -7,9 +7,11 @@ Read first: `PROGRESS.md` (status, next steps), `LESSONS.md` (every experiment w
 ## Commands
 
 ```bash
-.venv/bin/python main.py --level 1 --seed l1-a [--set name=value ...]      # one week
-.venv/bin/python evaluate.py --level 1 --seeds 10 --set ... --note "..."   # 10-week benchmark, ~2-4 min, logs results/log.jsonl
-.venv/bin/python analysis/fees.py [worldId ...]                            # analyse last benchmark (caches results/raw/)
+.venv/bin/python main.py --level 8 --seed l8-a --preset l8 [--set name=value ...]   # one week
+.venv/bin/python evaluate.py --level 8 --preset l8 [--seed-prefix l8x] --set ... --note "..."   # 10-week benchmark, ~2 min
+.venv/bin/python analysis/orders.py --note "..."     # per-order late%/margin of a logged run (caches results/raw/)
+.venv/bin/python main.py --final --preset l8         # the final
+.venv/bin/python -m unittest discover -s tests       # offline tests: run before every commit
 ```
 Scripts load `.env` themselves (`main.load_env`). Use `.venv/bin/python`, not system python (3.15 system, kit in venv). Run benchmarks **one at a time in the foreground** (detached background `&` runs were blocked by the permission classifier); a long one may be auto-moved to background — wait for its notification.
 
@@ -17,9 +19,10 @@ Scripts load `.env` themselves (`main.load_env`). Use `.venv/bin/python`, not sy
 
 - `main.py` — `play_practice` (advance loop, wakes on `dispatch.WAKE_ON` events, plus every `tick_min` when the ladder is on) and `play_final` (rebuild via `Desk.rejoin`, then WebSocket stream). No `--board` flag on purpose.
 - `dispatch.py` — `Desk`: state + `handle(event)` → actions in `outbox`. Fee decisions: `fee_schedule`, `steep_schedule`, `fees_for`, `ladder_mult`, `tick` (reprices unbooked non-urgent gigs upward). Note reader `window_from_note`.
-- `pricing.py` — `quote()`; list price of first option. **Levels 1–3: no quote = declined (not won).** Real pricing from level 4.
+- `pricing.py` — `quote()`: levels 1–3 list price (**no quote = declined**). Levels 4+: list × (`quote_mult` + `backlog_k` × backlog), decline (10× list) over `decline_km`, offer only options with ≥ `min_slack_h` slack.
+- `analysis/orders.py --note "..."` — per-order late%/margin by distance, option, day, hour, town. `analysis/common.py` loads worlds by log note.
 - `config.py` — `Params` dataclass; every tunable number. Defaults reproduce the kit starter exactly (ladder off). `--set k=v` overrides.
-- `evaluate.py` — seeds `l{level}-a..`, ≤ 6 parallel worlds, checks open-world count first, appends JSON line (commit, params, per-seed scores).
+- `evaluate.py` — seeds `l{level}-a..` (`--seed-prefix l8x` for the holdout set), ≤ 6 parallel worlds, checks open-world count first, appends JSON line (commit, params, per-seed scores).
 
 ## Invariants / gotchas
 
@@ -40,6 +43,10 @@ Scripts load `.env` themselves (`main.load_env`). Use `.venv/bin/python`, not sy
 - **Git:** remote is SSH with a YubiKey → the user runs `git fetch` / `git push` themselves (`! git ...`); merge locally after their fetch. We work on branch `otso/level1-baseline` (no PR for now); don't commit to `main` directly. Commit only when asked. Remote: `git@github.com:bethnguyenpawn/junction-2026-bahn67.git`.
 - Report numbers, not prose. The user prefers short, plain explanations.
 
-## Current best (level 1, 10 seeds)
+## Current best
 
-`--set open_mult=0.7 ladder_per_hour=0.3 ladder_cap=1.5` → +€34,186 (+€3,419/week), 93.2% on time, worst week 91.1%. Starter: −€28,978. (`open_mult=0.6` gives +€37,597 but worst week 90.5% — too risky.) Update this section when it changes.
+Presets in `config.PRESETS`, use `--preset NAME` with main.py / evaluate.py:
+- `l8` (the final's level): quote 1.6× list + 0.01 per unbooked order (backlog), decline > 500 km, only options with ≥ 8 h slack, fee opens 0.8×. **+€79,155 on l8-a..j, +€82,446 on unseen l8x-a..j, 20/20 weeks ranked, worst 92.0%.** Starter: −€604,425 per 10 weeks.
+- `l1`: fee ladder 0.7× +0.3×/h cap 1.5× → +€34,186 on l1-a..j (starter −€28,978).
+- `starter`: the default; reproduces the kit starter exactly.
+Always confirm a level-8 change on BOTH `l8` and `--seed-prefix l8x` before keeping it. Update this section when it changes.

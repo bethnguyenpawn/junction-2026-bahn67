@@ -8,7 +8,7 @@ are the decision points we tune.
 from __future__ import annotations
 
 import re
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 from spread.client import World
 from spread.types import (
@@ -29,6 +29,15 @@ from spread.types import (
 
 import pricing
 from config import DAY, HOUR, Params
+
+_ROADS: dict = {}
+
+
+def roads_of(client) -> dict:
+    """The map's roads keyed by (from, to). The map is the same for every world and costs no token: load once."""
+    if not _ROADS:
+        _ROADS.update({(r["from"], r["to"]): r for r in client.map()["roads"]})
+    return _ROADS
 
 # The events that need an answer. Views and account lines arrive with the next event that needs an answer.
 WAKE_ON = [
@@ -83,8 +92,9 @@ class Desk:
     """What we remember, and our answer to each event. Answers wait in the outbox until sent;
     the world applies them at the current minute."""
 
-    def __init__(self, world: World, level: int, now: int, params: Params):
+    def __init__(self, world: World, level: int, now: int, params: Params, roads: Optional[dict] = None):
         self.world, self.level, self.now, self.p = world, level, now, params
+        self.roads = roads or {}  # (from place, to place) -> {"km", "minutes"}
         self.outbox: list[Action] = []
         self.requests: dict[str, PriceRequest] = {}
         self.orders: dict[str, Order] = {}  # won and not cancelled
@@ -185,11 +195,21 @@ class Desk:
 
     def quote(self, request: PriceRequest) -> None:
         self.requests[request["id"]] = request
-        prices = pricing.quote(request, self.level, self.p)
+        leg = request["legs"][0]
+        road = self.roads.get((leg["pickup"]["placeId"], leg["delivery"]["placeId"]))
+        prices = pricing.quote(request, self.level, self.p, road["km"] if road else 0.0, self.backlog(),
+                               road["minutes"] if road else 0)
         if prices:
             self.outbox.append(
                 {"type": "quote", "requestId": request["id"], "prices": prices}
             )
+
+    def backlog(self) -> int:
+        """Won orders with an undelivered car that no driver holds."""
+        if not self.p.backlog_k:
+            return 0
+        return sum(1 for oid, order in self.orders.items()
+                   if undelivered(order) and not any(g in self.booked for g in self.gigs_of(oid)))
 
     def win(self, order: Order) -> None:
         if order["id"] in self.requests and order["id"] not in self.orders:

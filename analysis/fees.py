@@ -2,35 +2,17 @@
 
     python analysis/fees.py                 # worlds of the last evaluate.py run
     python analysis/fees.py w123 w456 ...   # specific worlds
+    python analysis/fees.py --note "L8 baseline: starter behaviour"
 
-Caches each world's events + reveal in results/raw/<world>.json.
+Caches each world's events + reveal in results/raw/<world>.json (analysis/common.py).
 """
 from __future__ import annotations
 
-import json
-import os
 import statistics as st
 import sys
 from collections import defaultdict
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from spread.client import Client  # noqa: E402
-
-from main import load_env  # noqa: E402
-
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RAW = os.path.join(ROOT, "results", "raw")
-
-
-def fetch(client: Client, wid: str) -> dict:
-    path = os.path.join(RAW, f"{wid}.json")
-    if os.path.exists(path):
-        return json.load(open(path))
-    w = client.world(wid)
-    data = {"events": w.events(), "reveal": w.reveal(), "snapshot": w.snapshot()}
-    os.makedirs(RAW, exist_ok=True)
-    json.dump(data, open(path, "w"))
-    return data
+from common import client, fetch, worlds_from_args
 
 
 def pct(xs, q):
@@ -39,21 +21,17 @@ def pct(xs, q):
 
 
 def main() -> None:
-    load_env()
-    client = Client()
-    wids = sys.argv[1:]
-    if not wids:
-        last = [json.loads(l) for l in open(os.path.join(ROOT, "results", "log.jsonl"))][-1]
-        wids = [r["worldId"] for r in last["runs"]]
-    roads = {(r["from"], r["to"]): r for r in client.map()["roads"]}
+    c = client()
+    wids = worlds_from_args(sys.argv[1:])
+    roads = {(r["from"], r["to"]): r for r in c.map()["roads"]}
 
     ratio_ref_list, ledger = [], defaultdict(int)
-    book_delay, booked_mult, lead = [], [], []
+    book_delay, booked_mult = [], []
     by_hour = defaultdict(lambda: [0, 0])  # post hour -> [posted, booked within 60 min]
     by_km = defaultdict(lambda: [0, 0, 0])  # km bucket -> [orders, late, margin cents]
     views_per_gig = []
     for wid in wids:
-        d = fetch(client, wid)
+        d = fetch(c, wid)
         req = {r["request"]["id"]: r["request"] for r in d["reveal"]["requests"]}
         gigs = {g["id"]: g for g in d["snapshot"]["gigs"]}
         order_money = defaultdict(int)

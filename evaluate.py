@@ -54,12 +54,13 @@ def main() -> None:
     parser.add_argument("--level", type=int, default=1)
     parser.add_argument("--seeds", type=int, default=10, help="number of seeds, l{level}-a ...")
     parser.add_argument("--seed-prefix", default=None, help="default l{level}")
+    parser.add_argument("--preset", choices=sorted(config.PRESETS), default="starter", help="named configuration from config.PRESETS")
     parser.add_argument("--set", nargs="*", default=[], metavar="NAME=VALUE")
     parser.add_argument("--note", default="", help="what this experiment tries")
     parser.add_argument("--parallel", type=int, default=MAX_PARALLEL)
     args = parser.parse_args()
     load_env()
-    params = config.from_overrides(args.set)
+    params = config.from_overrides(args.set, config.PRESETS[args.preset])
     prefix = args.seed_prefix or f"l{args.level}"
     letters = string.ascii_lowercase
     seeds = [f"{prefix}-{letters[i] if i < 26 else i}" for i in range(args.seeds)]
@@ -67,7 +68,7 @@ def main() -> None:
     open_worlds = sum(1 for w in Client().worlds() if not w["ended"])
     workers = max(1, min(args.parallel, MAX_PARALLEL, 8 - open_worlds))
     print(f"level {args.level}, {len(seeds)} seeds, {workers} in parallel ({open_worlds} worlds already open), "
-          f"params {args.set or 'default'}", flush=True)
+          f"preset {args.preset}, overrides {args.set or 'none'}", flush=True)
 
     started = time.time()
     results: dict[str, dict] = {}
@@ -94,7 +95,7 @@ def main() -> None:
     os.makedirs(os.path.join(ROOT, "results"), exist_ok=True)
     line = {
         "time": time.strftime("%Y-%m-%dT%H:%M:%S"), "commit": git_commit(), "level": args.level, "note": args.note,
-        "overrides": args.set, "params": params.as_dict(), "seeds": seeds,
+        "preset": args.preset, "overrides": args.set, "params": params.as_dict(), "seeds": seeds,
         "totalMarginCents": total, "onTimeShare": round(on_time, 4), "worstOnTime": round(worst, 4),
         "ranked": sum(r["ranked"] for r in rows), "completed": len(rows),
         "runs": [{k: r[k] for k in ("seed", "worldId", "marginCents", "revenueCents", "onTimeShare", "undeliveredShare", "wonOrders", "ranked")} for r in rows],
