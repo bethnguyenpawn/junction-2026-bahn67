@@ -97,6 +97,27 @@ spread-starter --level 1
 - [ ] Progress through Levels 2–8.
 - [ ] Test the final system and prepare submission.
 
+## Shared Level 8 seed test
+
+Team members should test their methods on the same five practice seeds:
+
+```bash
+python3 main.py --level 8 --seed l8a
+python3 main.py --level 8 --seed l8b
+python3 main.py --level 8 --seed l8c
+python3 main.py --level 8 --seed l8d
+python3 main.py --level 8 --seed l8e
+```
+
+For each seed, manually record the final margin and on-time percentage, and
+the total margin across all five seeds (weeks). If a branch uses a
+parameter-based preset instead of the heuristic method, use the same preset
+for every command:
+
+```bash
+python3 main.py --level 8 --seed l8a --preset YOUR_PRESET
+```
+
 ## 🤝 Collaboration
 
 - Work on separate Git branches.
