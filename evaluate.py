@@ -37,7 +37,14 @@ def git_commit() -> str:
 
 def run_seed(level: int, seed: str, params: config.Params) -> dict:
     client = Client()  # one connection per thread
-    world = client.create(level=level, seed=seed)
+    while True:  # the 8 slots are shared with teammates: wait for one instead of failing
+        try:
+            world = client.create(level=level, seed=seed)
+            break
+        except SpreadError as error:
+            if error.status != 409:
+                raise
+            time.sleep(5)
     try:
         score = play_practice(world, level, params, verbose=False)
     except BaseException:

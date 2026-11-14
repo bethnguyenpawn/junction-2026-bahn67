@@ -439,3 +439,20 @@ Also checked: gigs for a later day do not overpay (46% book at the opening fee);
 ## Restart test (the final's recovery path) ✓
 
 Played `l8-a` to Wednesday 12:00, threw the desk away, rebuilt it with `Desk.rejoin` from the snapshot and events, played on: **€11,739.88 vs €11,737.33 uninterrupted**, same orders and on-time share. `play_final` now also skips an event whose handling fails and rebuilds after any other error, instead of stopping.
+
+## Experiment 29: network pricing with a transportation LP (`lp`, `network.py`) ~ small gain, safer
+
+- **Idea:** model the country as a graph. The 30 towns are nodes; each supplies driver capacity = `lp_alpha` × drivers living there. Each car we hold without a driver needs one unit; a driver from town h costs the road hours h → pickup + delivery → h. A transportation LP (scipy HiGHS, ~9 ms) assigns the waiting cars to towns at least cost. A new request's **marginal cost** = LP cost with it − without it: the trip of the nearest driver with spare capacity, after our other cars have taken the nearest ones.
+- **Price:** + `lp_k` × (marginal hours − `lp_ref_h`): cheaper where the network has spare drivers close to both ends, dearer where it doesn't. Marginal hours on l8-a: p10 1.0, median 2.2, p90 6.0.
+- **Why:** the density rule (≥ 40 drivers within 30 km) is a step and ignores the delivery end and our own backlog; the global backlog brake slows every region when one is busy.
+- A first version read the marginal cost from the LP dual; when a town's capacity is used exactly the dual is not unique (a test got 24 h for a 1 h car), so the code uses the objective difference.
+
+| On `l8` | l8 | l8x | Worst | Verdict |
+|---|---|---|---|---|
+| `l8` (base) | €95,102 | €99,994 | 95.7% (l8) | |
+| **A: lp_k 0.05, ref 2.5 h, alpha 0.05** | **€96,348** | **€100,609** | **96.3%** (l8), 92.3% (l8x) | ~ +€1.9k over 20 weeks (+1%), within noise |
+| B: lp_k 0.1 instead of the density rule | €82,270 | | 94.2% | ✗ the density rule still matters |
+| C: alpha 0.02, no global backlog brake | €81,869 | | 93.8% | ✗ the global brake still matters |
+| D: A + quote 1.4 | €95,481 | | 94.9% | ✗ |
+
+- **Lesson:** the network view adds a little margin and safety on top of the flat rules, but it does not replace the density rule or the backlog brake. Code kept, off (`lp=0`). Not checked on l8y.

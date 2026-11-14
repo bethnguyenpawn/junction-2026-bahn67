@@ -128,8 +128,10 @@ class Desk:
     the world applies them at the current minute."""
 
     def __init__(self, world: World, level: int, now: int, params: Params, roads: Optional[dict] = None,
-                 near: Optional[dict[str, list[DriverProfile]]] = None):
+                 near: Optional[dict[str, list[DriverProfile]]] = None, network=None):
         self.world, self.level, self.now, self.p = world, level, now, params
+        self.network = network  # network.Network when Params.lp is on
+        self.lp_log: list[float] = []  # marginal costs seen, for analysis
         self.roads = roads or {}  # (from place, to place) -> {"km", "minutes"}
         self.near = near or {}  # place id -> drivers living within 30 km (empty = not loaded)
         self.adapt = 0.0  # price adjustment steered by our recent win rate (Params.adapt_*)
@@ -281,6 +283,7 @@ class Desk:
             adapt=self.adapt,
             dealer_requests=self.dealer_requests[dealer],
             monday=request["arrivedAt"] // DAY == 0,
+            lp_hours=self.lp_hours(request),
         ))
         if prices and not pricing.is_decline(request, prices):
             self.priced.add(request["id"])
@@ -288,6 +291,22 @@ class Desk:
             self.outbox.append(
                 {"type": "quote", "requestId": request["id"], "prices": prices}
             )
+
+    def lp_hours(self, request: PriceRequest) -> Optional[float]:
+        """The request's marginal cost from the network LP, given the cars we hold that no driver has yet."""
+        if self.network is None or self.level < 4:
+            return None
+        waiting = []
+        for oid, order in self.orders.items():
+            legs = undelivered(order)
+            if legs and not any(g in self.booked for g in self.gigs_of(oid)):
+                leg = order["legs"][legs[0]]
+                waiting.append((leg["pickup"]["placeId"], leg["delivery"]["placeId"]))
+        leg = request["legs"][0]
+        hours = self.network.marginal((leg["pickup"]["placeId"], leg["delivery"]["placeId"]), waiting)
+        if hours is not None:
+            self.lp_log.append(hours)
+        return hours
 
     def learn(self, request_id: str, won: bool) -> None:
         """Win-rate steering: each answer to a real quote moves the price a step, so that over time we win

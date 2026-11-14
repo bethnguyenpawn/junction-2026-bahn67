@@ -34,6 +34,7 @@ class Situation(NamedTuple):
     adapt: float = 0.0                    # win-rate adjustment (Params.adapt_*)
     dealer_requests: int = 0              # requests this dealer has sent this week, this one included
     monday: bool = False
+    lp_hours: Optional[float] = None      # marginal cost from the network LP (network.py), in hours
 
 
 def quote(request: PriceRequest, level: int, params: Params, s: Situation = Situation()) -> Optional[dict]:
@@ -47,6 +48,8 @@ def quote(request: PriceRequest, level: int, params: Params, s: Situation = Situ
                          decline_km=params.trust_km or params.decline_km)
     if params.decline_km and s.km > params.decline_km:
         return decline(request)
+    if params.lp_max_h and s.lp_hours is not None and s.lp_hours > params.lp_max_h:
+        return decline(request)  # no spare driver anywhere near: the network can't move this car
     options = request["options"]
     if params.min_slack_h:  # only options that leave time to find a driver; the dealer picks among them
         options = [o for o in options if slack(request, o, s) >= params.min_slack_h * HOUR]
@@ -83,6 +86,8 @@ def flat_mult(request: PriceRequest, level: int, params: Params, s: Situation) -
             mult -= p.dense_cut
         if p.sparse_n and s.near < p.sparse_n:
             mult += p.sparse_add
+    if p.lp_k and s.lp_hours is not None:
+        mult += p.lp_k * (s.lp_hours - p.lp_ref_h)
     if level >= 8 and p.trust_w:
         mult *= 1 + p.trust_w * 0.01 * min(s.trust, TRUST_CAP)
     return mult

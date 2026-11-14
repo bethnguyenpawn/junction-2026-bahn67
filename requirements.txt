@@ -1,2 +1,3 @@
 spread @ https://spread.bahnexpress.com/kit/spread-0.1.0-py3-none-any.whl
 numpy  # analysis/winmodel.py and latemodel.py only; the bot does not need it
+scipy  # network.py (lp=1) only

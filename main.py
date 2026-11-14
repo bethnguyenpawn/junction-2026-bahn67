@@ -44,10 +44,22 @@ def load_near(world: World, params: Params) -> Optional[dict]:
     return drivers_near(world.roster(), places_of(world.client))
 
 
+def load_network(world: World, params: Params):
+    """The towns graph and its LP (network.py), only when network pricing is on (one extra read)."""
+    if not params.lp:
+        return None
+    from network import Network  # needs numpy and scipy
+    return Network(roads_of(world.client), world.roster(), params.lp_alpha)
+
+
+def make_desk(world: World, level: int, now: int, params: Params) -> Desk:
+    return Desk(world, level, now, params, roads_of(world.client), load_near(world, params), load_network(world, params))
+
+
 def play_practice(world: World, level: int, params: Params, verbose: bool = True) -> Score:
     """Steps the world from one event that needs an answer to the next; one request per step."""
     snapshot = world.snapshot()
-    desk = Desk(world, level, snapshot["now"], params, roads_of(world.client), load_near(world, params))
+    desk = make_desk(world, level, snapshot["now"], params)
     ends_at = snapshot["endsAt"]
     seen = -1
     while desk.now < ends_at:
@@ -77,7 +89,7 @@ def play_final(world: World, params: Params) -> None:
     if snapshot["now"] >= snapshot["endsAt"]:
         return
     level = next((w["level"] for w in world.client.worlds() if w["worldId"] == world.id), 8)
-    desk = Desk(world, level, snapshot["now"], params, roads_of(world.client), load_near(world, params))
+    desk = make_desk(world, level, snapshot["now"], params)
     desk.rejoin(snapshot, history)
     desk.send()
     for event in world.stream(after=history[-1]["seq"] if history else -1, idle=1.0):

@@ -20,6 +20,14 @@ class Params:
     decline_km: float = 0.0         # decline (quote 10x list) when the first leg is longer
     min_slack_h: float = 0.0        # quote only options with deadline - drive - now >= this many hours (0 = first option only)
 
+    # --- Network pricing (network.py; 0 = off): a transportation LP over the towns gives each request's marginal
+    # cost in hours (nearest spare driver's trip to the pickup and home, plus the capacity it takes from our other cars).
+    lp: int = 0
+    lp_alpha: float = 0.05          # capacity of a town = lp_alpha x drivers living there
+    lp_k: float = 0.0               # + lp_k per hour of marginal cost above lp_ref_h (below it: cheaper)
+    lp_ref_h: float = 3.0
+    lp_max_h: float = 0.0           # decline when the marginal cost is above this many hours (0 = off)
+
     # --- Expected-profit pricing (levels 4+; 0 = off): quote the price that maximises
     # P(win | price, situation) x (price - expected cost). P is a logistic model fitted by analysis/winmodel.py.
     opt: int = 0
