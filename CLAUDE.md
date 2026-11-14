@@ -50,6 +50,7 @@ Scripts load `.env` themselves (`main.load_env`). Use `.venv/bin/python`, not sy
 
 Presets in `config.PRESETS`, use `--preset NAME` with main.py / evaluate.py:
 - `l8` (`l8_plan` without planning): quote 1.45× list + 0.03 per driverless order, −0.2 at ≥ 40 drivers near the pickup, +0.2 private addresses, + delivery-place offset (`dest_k=1`, `lanes.json`), decline > 550 km, options with ≥ 8 h slack, fee 0.8× +0.1× every 30 min. **€320,596 over 30 weeks (l8 €99,661, l8x €104,324, l8y €116,611), 30/30 ranked, worst 91.5%.**
+- `l8_guarded` (experimental, off): expected-profit quotes only where fitted lateness ≤ 8% and backlog < 3, capped to ±6% of list around `l8`; lost €3,664 over 20 fresh holdout weeks (`l8v`, `l8u`) vs `l8` (Exp. 38).
 - `l8_v3`: previous `l8` without the delivery-place offset: €307,943, worst 92.6% (played in the Sat-09:00 round). `l8_v2`: without the density/private rules: €297,267, worst 91.0%. `l8_v1`: Sat-00:00 ranking preset: €260,043.
 - Tried and failed the l8y check: `l8b` (+ quote 1.4, decline > 600): €311,874 but a 89.9% week. Cheaper base price / longer trips keep failing on fresh weeks.
 - Practice round "Saturday 09:00" with `l8_v3`: €47,002, rank 28/36 finished (House best €50,660, 10th €68,719). Top teams win 1.4–2× more orders at the same margin/order.

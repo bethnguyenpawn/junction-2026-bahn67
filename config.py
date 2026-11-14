@@ -58,6 +58,9 @@ class Params:
     opt_trust_gain: float = 0.0  # Exp. 29: value of +1 trust, x list per later request of that dealer
     opt_lo: float = 1.0  # price range searched, x list
     opt_hi: float = 2.0
+    opt_guard_late: float = 0.0  # if > 0, use flat pricing when predicted lateness exceeds this share
+    opt_guard_backlog: int = 0  # if > 0, use flat pricing when driverless backlog reaches this count
+    opt_delta_cap: float = 0.0  # if > 0, cap optimizer price change from flat quote as share of list
 
     # --- Protect dealer trust (level 8): a late order halves the dealer's count, so book drivers sooner for
     # dealers whose count is high.
@@ -196,6 +199,12 @@ PRESETS = {
     # Previous level-8 preset (practice round "Saturday 00:00": €46,496, rank 43/62): +€79,155 / +€82,446.
     "l8_v1": Params(quote_mult=1.6, backlog_k=0.01, decline_km=500, min_slack_h=8, open_mult=0.8),
 }
+
+# Experimental expected-profit pricing, based on the current lane-aware l8 quote. Use only for low-risk requests;
+# preserve the proven delivery-place, distance, deadline and driver fee rules through the flat-price fallback.
+PRESETS["l8_guarded"] = replace(
+    PRESETS["l8"], opt=1, opt_backlog=0.04, opt_guard_late=0.08, opt_guard_backlog=3, opt_delta_cap=0.06
+)
 
 
 def from_overrides(overrides: list[str], base: Params = DEFAULT) -> Params:

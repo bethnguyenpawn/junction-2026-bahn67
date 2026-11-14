@@ -34,7 +34,7 @@ Open `.env` and replace `put-your-team-key-here` with the `bahn67` key; ask a te
 **3. Check it works**
 
 ```bash
-python -m unittest discover -s tests                 # 20 tests OK (no key needed)
+python -m unittest discover -s tests                 # 25 tests OK (no key needed)
 python main.py --level 8 --seed l8-a --preset l8     # plays one practice week, ~1 min
 ```
 
@@ -52,7 +52,7 @@ python main.py --board --level 8 --preset l8_plan                       # rankin
 python main.py --final --preset l8_plan                                  # the final (live clock)
 ```
 
-- **Presets** (`config.py`): **`l8_plan` is the current best**, used for ranking runs and the final. `l8` is the same without batch planning, `starter` = the official starter, and the `l8_v*` presets are older versions. `--set name=value` changes any parameter.
+- **Presets** (`config.py`): **`l8_plan` is the current best**, used for ranking runs and the final. `l8` is the same without batch planning, `l8_guarded` is an experiment that was not adopted (Exp. 38), `starter` = the official starter, and the `l8_v*` presets are older versions. `--set name=value` changes any parameter.
 - **Test weeks:** tune on the `l8-a..j` weeks, confirm on `l8x`, and use `l8y` only as a final check. Each `evaluate.py` run is logged in `results/log.jsonl`.
 - **Ranking runs** (`--board`) only when the team agrees: 5 per round, and they can't be undone.
 
@@ -134,7 +134,7 @@ To decline, we quote 10× list: it never wins and costs nothing.
 | Win model: `winmodel.py` → `win_*` | Chance the dealer takes our price (price, dealer trust, Monday, drivers nearby, distance) | the same quotes | `opt` pricing (off) |
 | Late model: `latemodel.py` → `late_*` | Chance a won order is late (slack, private address, drivers nearby, backlog) | 16,118 won orders | `opt` pricing (off) |
 
-`opt=1` switches from the flat rules to "the price with the highest expected profit" from the win and late models. It is safe, but only +1% in tests, so it's off (Exp. 28–29).
+`opt=1` switches from the flat rules to "the price with the highest expected profit" from the win and late models. It remains off in `l8`: the guarded lane-aware experiment gained on tuning seeds but lost €3.7k across fresh holdouts (Exp. 38).
 
 ### Tested and off
 

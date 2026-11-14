@@ -558,3 +558,17 @@ Played `l8-a` to Wednesday 12:00, threw the desk away, rebuilt it with `Desk.rej
   Round leaders at the time: 1st €98,990, 10th €87,915, House best €77,560. The top 10 win ~430–470 orders/week at €40–43 each; we now win 373 at €38.
 - **Lesson:** sharing drivers was the lever, not price. Planning lifts volume ~45% at the same margin per order, and on-time stays 95–97%, so there is now room to win more.
 - **Open:** the `l8` and `l8y` benchmark weeks were never run with `l8_plan` (the 5 ranking weeks served as the fresh-week check). A lower `pair_fee` (pairs book in 1 minute) is untested.
+
+## Experiment 38: guarded expected-profit pricing on lane-aware `l8` ✗ (holdout does not support adoption)
+
+- **Bottleneck:** historical outcomes show that the model misses some delivery risk on longer jobs. Across the paired baseline and guarded `l8u-g` outcomes (429 won orders total), late share was elevated at 300–399 km (20.0%), 400–499 km (22.5%), and for `next_day` options (16.6%). Both `l8u-g` runs missed the 90% cutoff; the guarded candidate did not fix that failure.
+- **Change:** experimental `l8_guarded` keeps the lane-aware `l8` quote as fallback, uses expected-profit prices only when fitted lateness is ≤8% and backlog is below 3, and caps each price change to ±6% of list. Existing distance and deadline filters remain active.
+
+| Identical seeds | `l8` margin | `l8_guarded` margin | Difference | Ranked (`l8` / guarded) | Worst on time (`l8` / guarded) |
+|---|---:|---:|---:|---:|---:|
+| Tune `l8w-a..j` | €109,250 | €111,292 | +€2,042 | 10/10 / 10/10 | 92.62% / 93.49% |
+| Fresh holdout `l8v-a..j` | €99,006 | €99,085 | +€79 | 10/10 / 10/10 | 91.79% / 92.76% |
+| Fresh holdout `l8u-a..j` | €91,695 | €87,952 | −€3,744 | 9/10 / 9/10 | 88.84% / 89.25% |
+| Both fresh holdouts, 20 weeks | €190,701 | €187,037 | **−€3,664** | 19/20 / 19/20 | 88.84% / 89.25% |
+
+- **Decision:** keep lane-aware `l8` as the production preset; do not promote `l8_guarded`. The tune-set gain did not repeat on fresh holdouts, and the candidate lost margin there while neither strategy met the 90% requirement in one `l8u` week. `l8_guarded` remains available for further experiments only. The risk slices above are diagnostic signals from two paired outcomes, not a calibrated causal estimate.

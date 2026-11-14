@@ -95,6 +95,17 @@ class Pricing(unittest.TestCase):
         r["legs"] = [{"delivery": {"placeId": "nowhere"}}]  # unknown place: no offset
         self.assertEqual(quote(r, 8, Params(quote_mult=1.5, dest_k=1.0)), {"same_day": 15000})
 
+    def test_expected_profit_price_accounts_for_delivery_place_offset(self):
+        r = request([SAME])
+        r["arrivedAt"] = NOON
+        r["legs"] = [{"pickup": {"privateAddress": False}, "delivery": {"privateAddress": False, "placeId": "vantaa"}}]
+        p = Params(opt=1)
+        s = pricing.Situation(km=30, near=80, near_delivery=80)
+        vantaa = pricing.best_price(r, r["options"][0], p, s)
+        r["legs"][0]["delivery"]["placeId"] = "joensuu"
+        joensuu = pricing.best_price(r, r["options"][0], p, s)
+        self.assertLess(vantaa, joensuu)
+
     def test_win_rate_adjustment_moves_the_price(self):
         p = Params(quote_mult=1.5)
         self.assertEqual(quote(request([SAME]), 8, p, adapt=-0.1), {"same_day": 14000})
@@ -143,8 +154,37 @@ class Config(unittest.TestCase):
             from_overrides(["nope=1"])
 
     def test_presets_exist(self):
-        self.assertEqual(set(config.PRESETS), {"starter", "l1", "l8", "l8_plan", "l8_v3", "l8_v2", "l8_v1"})
+        self.assertEqual(
+            set(config.PRESETS), {"starter", "l1", "l8", "l8_plan", "l8_guarded", "l8_v3", "l8_v2", "l8_v1"}
+        )
         self.assertIs(PRESETS["starter"], DEFAULT)
+
+    def test_l8_guarded_keeps_lane_price_and_reliability_filters(self):
+        p = PRESETS["l8_guarded"]
+        self.assertEqual((p.dest_k, p.opt, p.opt_backlog), (1.0, 1, 0.04))
+        self.assertEqual((p.decline_km, p.min_slack_h), (550, 8))
+        self.assertEqual((p.opt_guard_late, p.opt_guard_backlog, p.opt_delta_cap), (0.08, 3, 0.06))
+
+    def test_l8_guarded_falls_back_to_flat_price_on_high_late_risk_or_backlog(self):
+        r = request([SAME])
+        r["arrivedAt"] = NOON
+        r["legs"] = [{"pickup": {"privateAddress": False}, "delivery": {"privateAddress": False, "placeId": "vantaa"}}]
+        p = PRESETS["l8_guarded"]
+        flat = quote(r, 8, PRESETS["l8"], near=0)
+        self.assertEqual(quote(r, 8, p, near=0), flat)
+        self.assertEqual(
+            quote(r, 8, p, km=30, near=80, near_delivery=80, backlog=3),
+            quote(r, 8, PRESETS["l8"], km=30, near=80, near_delivery=80, backlog=3),
+        )
+
+    def test_l8_guarded_caps_low_risk_price_change(self):
+        r = request([SAME])
+        r["arrivedAt"] = NOON
+        r["legs"] = [{"pickup": {"privateAddress": False}, "delivery": {"privateAddress": False, "placeId": "vantaa"}}]
+        p = PRESETS["l8_guarded"]
+        guarded = quote(r, 8, p, km=30, near=80, near_delivery=80)
+        flat = quote(r, 8, PRESETS["l8"], km=30, near=80, near_delivery=80)
+        self.assertLessEqual(abs(guarded["same_day"] - flat["same_day"]), int(SAME[2] * p.opt_delta_cap + 0.5))
 
 
 class Outage(unittest.TestCase):
