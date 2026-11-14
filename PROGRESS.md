@@ -29,8 +29,9 @@ Status, what we learned, and what's next. Every experiment with its numbers: [LE
 | **"Sunday 00:00"** (at 00:10, 24 teams done) | **`l8_early`** | **€72,623**, 359 orders/week, €40.4/order, worst 96.7% | **17 of 24** | €79,287 / €102,582 |
 | Test final Sat 14:00 (live, Thu–Wed) | `l8_plan` | €1,365, 68 orders, 94.1% | 32 of 55 | €3,292 / €4,023 |
 | Test final Sat 20:00 (live, full week) | `l8_chain` | €12,963, 334 orders, 97.6% | 41 of 75 | €16,623 / €19,592 |
+| **Test final Sun 01:00** (live, full week) | **`l8_early`** | **€10,355**, 308 orders, €33.6/order, 96.1% | **18 of 41** | €11,509 / €14,112 |
 
-**Gap (round Sunday 00:00):** −€1.3k/week to 10th (was −€2.8k in round 21:00); behind 10th in 4 of 5 weeks. Same margin per order as ranks 2–10 (€36.6–42.2), but they win 386–443 orders/week to our 359: ~40 more orders/week at our margin would reach the top 10. 1st (Juhus): 473 orders at €43.3.
+**Gap (round Sunday 00:00):** −€1.3k/week to 10th (was −€2.8k in round 21:00); behind 10th in 4 of 5 weeks. Same margin per order as ranks 2–10 (€36.6–42.2), but they win 386–443 orders/week to our 359: ~40 more orders/week at our margin would reach the top 10. 1st (Juhus): 473 orders at €43.3. Test final 01:00: 90% of 10th (20:00: 78%); we won 34–38% of priced quotes Mon–Thu, but the backlog brake pushed Tue–Wed quotes to 1.52–1.58× list (drivers were the bottleneck, on time dipped to 91.8% on Wednesday); Friday 23% at 1.31× (price war).
 
 Earlier: in the 20:00 test final the top 10 won 390–500 orders at €41–49 each; we won 334 at €38.8 (+€3.7k needed, +28%). Of 1,030 requests we won 340, lost 558 on price and declined 132 (105 of them > 550 km). Winning more by any means tried tonight lowers the margin: drivers are scarce, so extra cars cost more (Exp. 45).
 
