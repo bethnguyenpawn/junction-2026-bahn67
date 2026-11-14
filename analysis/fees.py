@@ -6,6 +6,7 @@
 
 Caches each world's events + reveal in results/raw/<world>.json (analysis/common.py).
 """
+
 from __future__ import annotations
 
 import statistics as st
@@ -82,9 +83,15 @@ def main() -> None:
     print(f"{n} worlds\n\nLEDGER per week")
     for k, v in sorted(ledger.items(), key=lambda x: x[1]):
         print(f"  {k:22} €{v / 100 / n:>11,.2f}")
-    print(f"\nTypical fee / list price: median {st.median(ratio_ref_list):.3f}  p10 {pct(ratio_ref_list, .1):.3f}  p90 {pct(ratio_ref_list, .9):.3f}")
-    print(f"Booked fee / typical fee: median {st.median(booked_mult):.2f}  share at 1.0x {sum(abs(m - 1) < .01 for m in booked_mult) / len(booked_mult):.1%}")
-    print(f"Minutes post -> booking: p25 {pct(book_delay, .25)}  median {pct(book_delay, .5)}  p75 {pct(book_delay, .75)}  p90 {pct(book_delay, .9)}")
+    print(
+        f"\nTypical fee / list price: median {st.median(ratio_ref_list):.3f}  p10 {pct(ratio_ref_list, 0.1):.3f}  p90 {pct(ratio_ref_list, 0.9):.3f}"
+    )
+    print(
+        f"Booked fee / typical fee: median {st.median(booked_mult):.2f}  share at 1.0x {sum(abs(m - 1) < 0.01 for m in booked_mult) / len(booked_mult):.1%}"
+    )
+    print(
+        f"Minutes post -> booking: p25 {pct(book_delay, 0.25)}  median {pct(book_delay, 0.5)}  p75 {pct(book_delay, 0.75)}  p90 {pct(book_delay, 0.9)}"
+    )
     print(f"Views per gig: median {st.median(views_per_gig)}  mean {st.mean(views_per_gig):.1f}")
     print("\nBy distance (km)   orders  late%   margin/order")
     for b in sorted(by_km):

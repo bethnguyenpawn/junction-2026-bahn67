@@ -1,7 +1,8 @@
 """Offline tests (no server, no key): pricing rules, fee schedules and config parsing.
 
-    python -m unittest discover -s tests
+python -m unittest discover -s tests
 """
+
 import os
 import sys
 import unittest
@@ -21,11 +22,16 @@ def quote(req, level, params, **situation):
 
 
 def request(options, respond_by=NOON):
-    return {"id": "R1", "respondBy": respond_by, "legs": [{}], "referenceFeeCents": 5000,
-            "options": [{"kind": k, "deadline": d, "listPriceCents": p} for k, d, p in options]}
+    return {
+        "id": "R1",
+        "respondBy": respond_by,
+        "legs": [{}],
+        "referenceFeeCents": 5000,
+        "options": [{"kind": k, "deadline": d, "listPriceCents": p} for k, d, p in options],
+    }
 
 
-SAME = ("same_day", 20 * 60, 10000)            # Monday 20:00
+SAME = ("same_day", 20 * 60, 10000)  # Monday 20:00
 NEXT = ("next_day", 24 * 60 + 20 * 60, 12000)  # Tuesday 20:00
 
 
@@ -78,6 +84,17 @@ class Pricing(unittest.TestCase):
         self.assertEqual(quote(r, 8, Params(quote_mult=1.5, private_add=0.2)), {"same_day": 17000})
         self.assertEqual(quote(r, 8, Params(quote_mult=1.5, private_add=9)), {"same_day": 100000})
 
+    def test_delivery_place_offset(self):
+        r = request([SAME])
+        r["legs"] = [{"delivery": {"placeId": "vantaa"}}]
+        offset = pricing.DEST_OFFSET["vantaa"]  # competitor cheap there: we quote lower
+        self.assertLess(offset, 0)
+        self.assertEqual(
+            quote(r, 8, Params(quote_mult=1.5, dest_k=1.0)), {"same_day": int(10000 * (1.5 + offset) + 0.5)}
+        )
+        r["legs"] = [{"delivery": {"placeId": "nowhere"}}]  # unknown place: no offset
+        self.assertEqual(quote(r, 8, Params(quote_mult=1.5, dest_k=1.0)), {"same_day": 15000})
+
     def test_win_rate_adjustment_moves_the_price(self):
         p = Params(quote_mult=1.5)
         self.assertEqual(quote(request([SAME]), 8, p, adapt=-0.1), {"same_day": 14000})
@@ -118,7 +135,7 @@ class Config(unittest.TestCase):
             from_overrides(["nope=1"])
 
     def test_presets_exist(self):
-        self.assertEqual(set(config.PRESETS), {"starter", "l1", "l8", "l8_v2", "l8_v1"})
+        self.assertEqual(set(config.PRESETS), {"starter", "l1", "l8", "l8_v3", "l8_v2", "l8_v1"})
         self.assertIs(PRESETS["starter"], DEFAULT)
 
 

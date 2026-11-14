@@ -1,4 +1,5 @@
 """Shared loading for analysis scripts: pick worlds from results/log.jsonl, cache events + reveal."""
+
 from __future__ import annotations
 
 import json

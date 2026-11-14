@@ -1,0 +1,2 @@
+# One style for everyone: the editor (Ruff extension) and the command line use this.
+line-length = 120

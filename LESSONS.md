@@ -439,3 +439,53 @@ Also checked: gigs for a later day do not overpay (46% book at the opening fee);
 ## Restart test (the final's recovery path) ✓
 
 Played `l8-a` to Wednesday 12:00, threw the desk away, rebuilt it with `Desk.rejoin` from the snapshot and events, played on: **€11,739.88 vs €11,737.33 uninterrupted**, same orders and on-time share. `play_final` now also skips an event whose handling fails and rebuilds after any other error, instead of stopping.
+
+## Experiment 29: making `opt` safer; trust as an investment ✗ (no clear gain)
+
+- **Diagnosis** (`analysis/orders.py`, l8x, opt vs `l8`): `opt` won 79 two-leg trade-ins (private addresses), **43% late**; flat `l8` almost never wins them. Late orders also cluster in same-day options with 24–36 h slack at 1.3–1.5×.
+- New `max_legs=1` (decline trade-ins) and `opt_trust_gain` (value of +1 trust per request we expect from that dealer later this week). Both off by default.
+
+| opt + backlog cost 0.04 + … | l8 | l8x | Worst |
+|---|---|---|---|
+| `l8` (flat, for reference) | €95,102 | €99,994 | 92.6% |
+| max_legs=1 | | €98,259 | **89.4%** ✗ |
+| max_legs=1, late refund share 1.0 | **€98,156** | €99,248 | 91.4% |
+| … + trust gain 0.0015 | €94,363 | | 93.6% |
+| … + trust gain 0.005 | €83,338 (+15% orders) | | 92.6% |
+
+- **Lesson:** a stronger lateness penalty makes `opt` safe (worst 91.4%), but it is only +€2.4k over 20 weeks vs `l8`: too thin to switch. Buying trust with lower prices loses money at every strength: the extra wins come at prices that don't pay.
+
+## Experiment 30: price per delivery place (competitor's lane prices) ✓ adopted (+4.1%)
+
+- **Why:** the top teams win ~400 orders/week vs our ~255 at the same margin per order. HANDBOOK: the competitor's price per lane is "higher where little work comes back and where few drivers live near the delivery place", and this part is "almost the same in every world".
+- **Check** (`analysis/lanes.py`, 19,450 random-price quotes from the two explore runs): adding one indicator per delivery place to the win model improves log loss on *other worlds* (fit on seeds a–e, test on f–j) from 0.458 to 0.436. The pickup place adds nothing.
+- **Offsets** (`lanes.json`, x list price): Vantaa −0.17, Helsinki −0.10, Hyvinkää −0.09, Espoo −0.05 … Joensuu +0.18, Ylivieska +0.18, Savonlinna +0.17, Kemi +0.16. New rule `dest_k`: price + dest_k × offset.
+
+| `l8` + dest_k | l8 | l8x | l8y | Worst |
+|---|---|---|---|---|
+| 0 (previous `l8`, now `l8_v3`) | €95,102 | €99,994 | €112,847 | 92.6% |
+| **1.0** | **€99,661** | **€104,324** | **€116,611** | **91.5%** (l8x-b, always our hardest week) |
+| 1.5 | €95,749 | | | 95.6% |
+
+- **Lesson:** +€12,653 over 30 weeks (+4.1%), on weeks the table was not fitted on as well (l8x, l8y). The fitted size (1.0) is the best. Adopted into `l8`.
+
+## Experiment 31: learn the week's competitor price level ✗ (not safe enough)
+
+- **Idea:** the competitor's level differs by week (26–54% above list) and moves during it. At each quote the win model (+ delivery-place offsets) predicts our win chance; each answer moves `market` by `market_lr × (won − expected)`, and our price by `market` (x list). New `pricing.win_chance`, `Desk.market`; off by default.
+- **Trace** (`l8x-b`, step 0.003): Mon 24 wins vs 36 expected, Tue–Thu close, **Fri 47 vs 10**: the competitor gets much dearer by Friday (it raises prices for dealers we rarely win).
+
+| `l8` + market_lr | l8 | l8x | l8y | Worst |
+|---|---|---|---|---|
+| 0 (`l8`) | €99,661 | €104,324 | €116,611 | 91.5% |
+| 0.003 | €99,445 | | | 96.6% |
+| 0.01 | €96,866 | | | 93.8% |
+| 0.01, raise only | €95,809 | | | 96.5% |
+| 0.01, lower only | €102,402 | €106,574 | €115,725 | **90.6%** (l8y-a) ✗ |
+| 0.01, lower only, at most −0.1 | €99,316 | €103,315 | | 93.8% |
+
+- **Lesson:** raising the price when we win more than expected loses (the extra wins were worth having). Lowering when we lose more gains +€4.1k over 30 weeks only when it may go down to −0.2×, and then a fresh week falls under 91%. Same pattern as before: cheaper prices win orders we then deliver late.
+
+## Experiment 32: weekday prices ✗
+
+- **Weekday in the win model** (random-price quotes, fit on seeds a–e, test on f–j): log loss on other worlds gets *worse* (0.436 → 0.454). The competitor's day factor is new in every world (HANDBOOK), so a weekday table would fit noise.
+- **Monday only** (`monday_add`, off): −0.2× → €96,361 on l8 (vs €99,661); +0.2× → €98,884. Cheaper Mondays don't build enough trust to pay; dearer ones lose the few Monday wins. Monday price doesn't matter.

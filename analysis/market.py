@@ -1,7 +1,8 @@
 """Market view of ended worlds: what we quoted, won and lost, and how the drivers near a town shape margin.
 
-    python analysis/market.py --note "L8 l8: l8v3 decline550"
+python analysis/market.py --note "L8 l8: l8v3 decline550"
 """
+
 from __future__ import annotations
 
 import sys
@@ -54,21 +55,39 @@ def main():
             first = r["options"][0]
             q = rr.get("quote") or {}
             mult = min((q[o["kind"]] / o["listPriceCents"] for o in r["options"] if o["kind"] in q), default=None)
-            row = {"km": roads[(pu, de)]["km"], "near_pu": near[pu], "near_de": near[de], "mult": mult,
-                   "outcome": rr["outcome"], "list": first["listPriceCents"], "ref": r["referenceFeeCents"],
-                   "hour": (r["arrivedAt"] % 1440) // 60, "day": r["arrivedAt"] // 1440, "legs": len(r["legs"])}
+            row = {
+                "km": roads[(pu, de)]["km"],
+                "near_pu": near[pu],
+                "near_de": near[de],
+                "mult": mult,
+                "outcome": rr["outcome"],
+                "list": first["listPriceCents"],
+                "ref": r["referenceFeeCents"],
+                "hour": (r["arrivedAt"] % 1440) // 60,
+                "day": r["arrivedAt"] // 1440,
+                "legs": len(r["legs"]),
+            }
             reqs.append(row)
             if rr["outcome"] == "won" and r["id"] not in cancelled:
-                row = dict(row, margin=money.get(r["id"], 0), late=r["id"] in late, fee=fees.get(r["id"], 0),
-                           option=rr["option"])
+                row = dict(
+                    row,
+                    margin=money.get(r["id"], 0),
+                    late=r["id"] in late,
+                    fee=fees.get(r["id"], 0),
+                    option=rr["option"],
+                )
                 orders.append(row)
     n = len(wids)
     quoted = [r for r in reqs if r["mult"] is not None and r["mult"] < 5]
     declined = [r for r in reqs if r["mult"] is not None and r["mult"] >= 5]
-    print(f"{n} worlds: {len(reqs) / n:.0f} requests/week, quoted {len(quoted) / n:.0f}, declined {len(declined) / n:.0f}, "
-          f"won {sum(r['outcome'] == 'won' for r in quoted) / n:.0f} ({sum(r['outcome'] == 'won' for r in quoted) / max(1, len(quoted)):.0%} of quoted)")
-    print(f"won orders/week {len(orders) / n:.0f}, margin/order €{sum(o['margin'] for o in orders) / len(orders) / 100:.2f}, "
-          f"late {sum(o['late'] for o in orders) / len(orders):.1%}")
+    print(
+        f"{n} worlds: {len(reqs) / n:.0f} requests/week, quoted {len(quoted) / n:.0f}, declined {len(declined) / n:.0f}, "
+        f"won {sum(r['outcome'] == 'won' for r in quoted) / n:.0f} ({sum(r['outcome'] == 'won' for r in quoted) / max(1, len(quoted)):.0%} of quoted)"
+    )
+    print(
+        f"won orders/week {len(orders) / n:.0f}, margin/order €{sum(o['margin'] for o in orders) / len(orders) / 100:.2f}, "
+        f"late {sum(o['late'] for o in orders) / len(orders):.1%}"
+    )
     win = ("win%", lambda g: f"{sum(r['outcome'] == 'won' for r in g) / len(g):.0%}")
     cnt = ("n/week", lambda g: f"{len(g) / n:.1f}")
     late = ("late%", lambda g: f"{sum(o['late'] for o in g) / len(g):.1%}")
@@ -88,8 +107,14 @@ def main():
     table("Quoted by drivers within 30 km of pickup", by(quoted, lambda r: bucket(r["near_pu"])), [cnt, win, refl])
     table("ALL requests by drivers near pickup", by(reqs, lambda r: bucket(r["near_pu"])), [cnt, refl])
     table("Won orders by drivers near pickup", by(orders, lambda r: bucket(r["near_pu"])), [cnt, late, marg, tot, feer])
-    table("Won orders by drivers near delivery", by(orders, lambda r: bucket(r["near_de"])), [cnt, late, marg, tot, feer])
-    table("Won orders by km", by(orders, lambda r: min(int(r["km"] // 100) * 100, 500)), [cnt, late, marg, tot, feer, refl])
+    table(
+        "Won orders by drivers near delivery", by(orders, lambda r: bucket(r["near_de"])), [cnt, late, marg, tot, feer]
+    )
+    table(
+        "Won orders by km",
+        by(orders, lambda r: min(int(r["km"] // 100) * 100, 500)),
+        [cnt, late, marg, tot, feer, refl],
+    )
     table("Declined by km", by(declined, lambda r: min(int(r["km"] // 100) * 100, 600)), [cnt])
     table("Won by option", by(orders, lambda r: r["option"]), [cnt, late, marg, tot, feer])
 
