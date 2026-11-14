@@ -51,7 +51,7 @@ class Situation(NamedTuple):
     monday: bool = False
 
 
-def quote(request: PriceRequest, level: int, params: Params, s: Situation = Situation()) -> dict | None:
+def quote(request: PriceRequest, level: int, params: Params, s: Situation = Situation()) -> dict | None:  # noqa: B008
     """The prices to quote per option. Default params: list price of the first option, as the starter."""
     first = request["options"][0]
     if level < 4:

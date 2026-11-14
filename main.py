@@ -42,10 +42,11 @@ def load_env(
     """Reads SPREAD_URL / SPREAD_KEY from .env when they are not already set. Never prints them."""
     if not os.path.exists(path):
         return
-    for line in open(path):
-        key, sep, value = line.strip().partition("=")
-        if sep and key and not key.startswith("#"):
-            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+    with open(path) as lines:
+        for line in lines:
+            key, sep, value = line.strip().partition("=")
+            if sep and key and not key.startswith("#"):
+                os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
 def load_near(world: World, params: Params) -> dict | None:
@@ -135,7 +136,7 @@ def guarded(what: str, step, *args) -> None:
         step(*args)
     except Unreachable:
         raise
-    except Exception:
+    except Exception:  # noqa: BLE001 - deliberate: any bug in one step must not stop the live week
         print(f"Skipped {what}:", file=sys.stderr)
         traceback.print_exc()
 
@@ -228,7 +229,7 @@ def main() -> None:
                         flush=True,
                     )
                     time.sleep(5)
-                except Exception:  # any other failure: rebuild from the world and go on; the clock does not wait
+                except Exception:  # noqa: BLE001 - any other failure: rebuild from the world, the clock does not wait
                     traceback.print_exc()
                     print(
                         "Rebuilding from the world in 2 seconds.",

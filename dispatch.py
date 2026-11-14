@@ -17,6 +17,7 @@ from spread.types import (
     Action,
     ActionResult,
     Audience,
+    CancelledGig,
     DeskEvent,
     DeskSnapshot,
     DriverProfile,
@@ -875,7 +876,7 @@ class Desk:
             return None
         return link["minutes"]
 
-    def cancel(self, order_id: str, gigs: list) -> None:
+    def cancel(self, order_id: str, gigs: list[CancelledGig]) -> None:
         """Forgets a cancelled order. A gig the world withdrew for it may carry other cars: RULES say to post them
         again, else they keep no gig and are never delivered."""
         for books in (self.orders, self.leg_gigs, self.held):
@@ -964,7 +965,7 @@ class Desk:
 
     def raise_every(self, order_ids: list[str]) -> int:
         """Minutes between raises: slow_every_min when every car still has slow_after_h hours until its last pickup
-        (no hurry, so drivers who wait for a raise wait long), else the usual raise_every_min (0)."""
+        (no hurry, so drivers who wait for a raise wait long); 0 = the usual raise_every_min."""
         p = self.p
         if not p.slow_every_min:
             return 0
@@ -1039,7 +1040,7 @@ class Desk:
                 ),
             )
 
-    def post(self, order: Order, legs: list[int], retry: Retry = Retry()) -> None:
+    def post(self, order: Order, legs: list[int], retry: Retry = Retry()) -> None:  # noqa: B008 - immutable
         # A premium car needs an experienced driver: the fine is €150 a car.
         audience: Audience = {
             "experienced": any(leg["car"]["premium"] for leg in order["legs"]),

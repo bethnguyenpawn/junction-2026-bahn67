@@ -39,7 +39,7 @@ def git_commit() -> str:
         ).strip()
         dirty = subprocess.check_output(["git", "status", "--porcelain", "--", "*.py"], cwd=ROOT, text=True).strip()
         return sha + ("-dirty" if dirty else "")
-    except Exception:
+    except (OSError, subprocess.CalledProcessError):  # no git: the log still gets written
         return "unknown"
 
 
@@ -118,7 +118,7 @@ def main() -> None:
                     f"{r['wonOrders']:>4} orders  {r['worldId']}",
                     flush=True,
                 )
-            except Exception as error:
+            except Exception as error:  # noqa: BLE001 - one failed week must not stop the other nine
                 print(f"  {seed:<8} FAILED: {error}", file=sys.stderr, flush=True)
 
     rows = [results[s] for s in seeds if s in results]
