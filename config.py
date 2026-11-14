@@ -21,6 +21,17 @@ class Params:
     dest_k: float = 0.0  # + dest_k x the delivery place's competitor price offset (lanes.json, x list)
     decline_km: float = 0.0  # decline (quote 10x list) when the first leg is longer
     min_slack_h: float = 0.0  # quote only options with >= this many hours slack (0 = first option only)
+    # Outage (RULES: the competitor is down in one region for a working day, 08-18; dealers pay a backup ~30% more):
+    # when today we won >= outage_rate of >= outage_n answered quotes with a pickup within outage_km, + outage_add.
+    outage_add: float = 0.0
+    outage_n: int = 8
+    outage_rate: float = 0.75
+    outage_km: float = 100.0
+    # Price war (RULES: one working day the competitor is 20% cheaper everywhere, 08-18): when today (Tue-Fri) we won
+    # < war_rate of >= war_n answered quotes, - war_cut for the rest of the day.
+    war_cut: float = 0.0
+    war_n: int = 15
+    war_rate: float = 0.15
 
     # --- Expected-profit pricing (levels 4+; 0 = off): quote the price that maximises
     # P(win | price, situation) x (price - expected cost). P is a logistic model fitted by analysis/winmodel.py.
@@ -57,6 +68,14 @@ class Params:
     trust_km: float = 0.0  # ... and decline trips longer than this (0 = keep decline_km)
     trust_fee: float = 1.0  # fee factor for orders of a dealer with count >= trust_fee_n; 1.0 = off (Exp. 27: worse)
     trust_fee_n: int = 5
+
+    # --- Batch planning (two-car gigs): hold plain one-car orders with slack, and every plan_every_h hours (07-19)
+    # pair the held cars so one driver delivers both (round trips first); post the rest alone when they can't wait.
+    plan_every_h: float = 0.0  # 0 = off: post every order when won
+    hold_h: float = 8.0  # hold an order only with >= this many hours until its latest pickup
+    wait_h: float = 0.0  # an unpaired held car waits for the next plan only with >= this many hours spare (0 = hold_h)
+    split_after_min: int = 0  # a two-car gig no driver booked within this many minutes goes back to one gig per car
+    # (uses pair_fee, pair_km, pair_lead_min, pair_margin_h below)
 
     # --- Normal driver fee schedule, as multiples of the request's typical fee (referenceFeeCents).
     open_mult: float = 1.0  # opening fee
@@ -117,10 +136,10 @@ PRESETS = {
     "starter": DEFAULT,
     # Level 1: fee ladder by reprice. +€34,186 on l1-a..j (starter -€28,978), worst week 91.1%.
     "l1": Params(open_mult=0.7, ladder_per_hour=0.3, ladder_cap=1.5),
-    # Level 8 (the final): price 1.45x list + 0.03 per driverless order, 0.2 cheaper where >= 40 drivers live within
-    # 30 km of the pickup, 0.2 dearer for private addresses, + the competitor's offset for the delivery place
-    # (lanes.json, -0.17x Vantaa .. +0.18x Joensuu); decline > 550 km; only options with >= 8 h slack;
-    # fee opens 0.8x, +0.1x every 30 min. 30 weeks (l8 €99,661, l8x €104,324, l8y €116,611): €320,596, worst week 91.5%.
+    # Level 8 without planning (the base of l8_plan): price 1.45x list + 0.03 per driverless order, 0.2 cheaper
+    # where >= 40 drivers live within 30 km of the pickup, 0.2 dearer for private addresses, + the competitor's
+    # offset for the delivery place (lanes.json, -0.17x Vantaa .. +0.18x Joensuu); decline > 550 km; only options
+    # with >= 8 h slack; fee opens 0.8x, +0.1x every 30 min. 30 weeks (l8 €99,661, l8x €104,324, l8y €116,611): €320,596, worst week 91.5%.
     "l8": Params(
         quote_mult=1.45,
         backlog_k=0.03,
@@ -132,6 +151,26 @@ PRESETS = {
         dense_cut=0.2,
         private_add=0.2,
         dest_k=1.0,
+    ),
+    # CURRENT BEST, used for ranking runs and the final: l8 + batch planning of two-car gigs (Exp. 37).
+    # l8x €116,121 (l8: €104,324), worst week 93.2%; ranking round "Saturday 12:00": €71,409 in 5 weeks, worst 94.9%.
+    "l8_plan": Params(
+        quote_mult=1.45,
+        backlog_k=0.03,
+        decline_km=550,
+        min_slack_h=8,
+        open_mult=0.8,
+        raise_every_min=30,
+        dense_n=40,
+        dense_cut=0.2,
+        private_add=0.2,
+        dest_k=1.0,
+        plan_every_h=3,
+        pair_km=30,
+        pair_fee=0.9,
+        pair_margin_h=4,
+        split_after_min=120,
+        wait_h=24,
     ),
     # Previous l8 (Sat noon): same without the delivery-place offsets. €307,943, worst week 92.6%.
     "l8_v3": Params(

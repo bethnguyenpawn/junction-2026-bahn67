@@ -3,7 +3,7 @@
     python evaluate.py --level 1 --seeds 10 [--set open_mult=0.9 ...] [--note "idea"]
 
 Seeds are "l{level}-a", "l{level}-b", ... so every version is compared on the same weeks.
-Runs in parallel, never more than 6 unfinished worlds of ours at once (team limit is 8).
+Runs in parallel, never more than 4 unfinished worlds of ours at once (team limit is 8).
 Appends one JSON line per run to results/log.jsonl.
 """
 
@@ -24,7 +24,7 @@ import config
 from main import load_env, play_practice
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-MAX_PARALLEL = 6  # leaves two slots for teammates (team limit 8)
+MAX_PARALLEL = 4  # half of the team limit (8): the other 4 slots are for teammates
 
 
 def git_commit() -> str:

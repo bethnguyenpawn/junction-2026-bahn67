@@ -34,7 +34,7 @@ Open `.env` and replace `put-your-team-key-here` with the `bahn67` key; ask a te
 **3. Check it works**
 
 ```bash
-python -m unittest discover -s tests                 # 18 tests OK (no key needed)
+python -m unittest discover -s tests                 # 20 tests OK (no key needed)
 python main.py --level 8 --seed l8-a --preset l8     # plays one practice week, ~1 min
 ```
 
@@ -43,16 +43,17 @@ The week should end with about `margin € 13,272   305 orders   95.4% on time  
 ## Commands
 
 ```bash
-python main.py --level 8 --seed l8-a --preset l8                         # one practice week
-python evaluate.py --level 8 --preset l8                                 # benchmark: 10 fixed weeks, ~1-2 min
-python evaluate.py --level 8 --preset l8 --seed-prefix l8x               # the same on 10 other weeks
-python evaluate.py --level 8 --preset l8 --set quote_mult=1.5 --note "idea"   # try one change
+python main.py --level 8 --seed l8-a --preset l8_plan                    # one practice week
+python evaluate.py --level 8 --preset l8_plan                            # benchmark: 10 fixed weeks, ~2 min
+python evaluate.py --level 8 --preset l8_plan --seed-prefix l8x          # the same on 10 other weeks
+python evaluate.py --level 8 --preset l8_plan --set quote_mult=1.4 --note "idea"   # try one change
 python analysis/orders.py --note "idea"                                  # which orders were late / lost money
-python main.py --final --preset l8                                       # the final (live clock)
+python main.py --board --level 8 --preset l8_plan                       # ranking run: only one at a time per team
+python main.py --final --preset l8_plan                                  # the final (live clock)
 ```
 
-- **Presets** (`config.py`): `l8` is the current best, used for the final. `starter` = the official starter, and the `l8_v*` presets are older versions. `--set name=value` changes any parameter.
-- **Test weeks:** tune on `l8`, confirm on `l8x`, and use `l8y` only as a final check. Each `evaluate.py` run is logged in `results/log.jsonl`.
+- **Presets** (`config.py`): **`l8_plan` is the current best**, used for ranking runs and the final. `l8` is the same without batch planning, `starter` = the official starter, and the `l8_v*` presets are older versions. `--set name=value` changes any parameter.
+- **Test weeks:** tune on the `l8-a..j` weeks, confirm on `l8x`, and use `l8y` only as a final check. Each `evaluate.py` run is logged in `results/log.jsonl`.
 - **Ranking runs** (`--board`) only when the team agrees: 5 per round, and they can't be undone.
 
 ## Files
@@ -103,7 +104,7 @@ We use the official `spread` Python kit. It sends HTTPS + JSON to `https://sprea
 
 Winning means picking good numbers. All of them live in `Params` in `config.py`, and a preset is one set of them. Try a change without editing code: `--set name=value`.
 
-### Parameters used by `--preset l8`
+### Parameters used by `--preset l8_plan`
 
 | Parameter | Value | What it does | Why this value |
 |---|---|---|---|
@@ -117,6 +118,11 @@ Winning means picking good numbers. All of them live in `Params` in `config.py`,
 | `open_mult` | 0.8 | A gig's fee opens at 0.8× the typical fee | Fees are ~60% of revenue |
 | `raise_per_step`, `raise_every_min`, `raise_steps` | 0.1, 30, 6 | +0.1× every 30 min, up to 1.3× | Best tested as one schedule for all cars |
 | `steep_*` | defaults | After the deadline warning: 1.5×, +0.25× every 30 min, up to 2.5× | Last chance to find a driver |
+| `plan_every_h` | 3 | Batch planning: hold won cars with ≥ 8 h (`hold_h`) to their latest pickup; every 3 h (07:00–19:00) pair them into two-car gigs | One driver delivers two cars: ~45% more orders (Exp. 37) |
+| `pair_km`, `pair_margin_h` | 30, 4 | Pair car A with car B if B's pickup is ≤ 30 km from A's delivery and both arrive ≥ 4 h before their deadline | Round trips first, then the shortest link |
+| `pair_fee` | 0.9 | A two-car gig pays 0.9× both typical fees | Pairs are booked within a minute |
+| `wait_h` | 24 | An unpaired car waits for the next plan only with ≥ 24 h to spare, else it's posted alone | Cars held too long were late 19% |
+| `split_after_min` | 120 | A pair nobody books within 2 h is split into two one-car gigs | Fixed three weeks under 90% |
 
 To decline, we quote 10× list: it never wins and costs nothing.
 
@@ -124,7 +130,7 @@ To decline, we quote 10× list: it never wins and costs nothing.
 
 | Model | Predicts | Learned from | Used by |
 |---|---|---|---|
-| Lane table: `lanes.py` → `lanes.json` | How much dearer the competitor is per delivery town | 19,450 quotes at random prices | `l8` (`dest_k`), **on** |
+| Lane table: `lanes.py` → `lanes.json` | How much dearer the competitor is per delivery town | 19,450 quotes at random prices | `l8`, `l8_plan` (`dest_k`), **on** |
 | Win model: `winmodel.py` → `win_*` | Chance the dealer takes our price (price, dealer trust, Monday, drivers nearby, distance) | the same quotes | `opt` pricing (off) |
 | Late model: `latemodel.py` → `late_*` | Chance a won order is late (slack, private address, drivers nearby, backlog) | 16,118 won orders | `opt` pricing (off) |
 
@@ -132,27 +138,29 @@ To decline, we quote 10× list: it never wins and costs nothing.
 
 ### Tested and off
 
-Every other `Params` field is a rule we tested that didn't help. They're kept so each test can be rerun; the experiment number is next to each field in `config.py`, and the numbers are in `LESSONS.md`. They include: dealer-trust pricing, Monday prices, learning the week's price level, win-rate steering, direct offers to drivers (also return trips, Exp. 33), two-car gigs, per-car fee levels, and price by cost.
+Every other `Params` field is a rule we tested that didn't help. They're kept so each test can be rerun; the experiment number is next to each field in `config.py`, and the numbers are in `LESSONS.md`. They include: dealer-trust pricing, Monday prices, learning the week's price level, win-rate steering, direct offers to drivers (also return trips, Exp. 33), two-car gigs posted as soon as cars are won (Exp. 24, replaced by planning), per-car fee levels, and price by cost.
+
+Also tested: reacting to the competitor's outage day (`outage_add`, Exp. 34) and price-war day (`war_cut`, Exp. 35). The bot detects both, but changing the price on those days doesn't pay.
 
 ### How to test a change
 
 ```bash
-python evaluate.py --level 8 --preset l8 --set quote_mult=1.4 --note "q1.4"                    # 10 tuning weeks
-python evaluate.py --level 8 --preset l8 --seed-prefix l8x --set quote_mult=1.4 --note "x: q1.4"   # 10 holdout weeks
+python evaluate.py --level 8 --preset l8_plan --set quote_mult=1.4 --note "plan q1.4"                    # 10 tuning weeks
+python evaluate.py --level 8 --preset l8_plan --seed-prefix l8x --set quote_mult=1.4 --note "x: plan q1.4"   # 10 holdout weeks
 ```
 
-Compare with `l8`: €99,661 on the tuning weeks, €104,324 on `l8x`, €116,611 on `l8y`. Keep a change only if margin rises on both sets and every week stays ≥ 91% on time. Then log it in `LESSONS.md`.
+Compare with `l8_plan`: €116,121 on `l8x` (run it once on `l8` and `l8y` to get those baselines; `l8` without planning: €99,661 / €104,324 / €116,611). Keep a change only if margin rises on both sets and every week stays ≥ 91% on time. Then log it in `LESSONS.md`.
 
-## Status (Sat 14 Nov)
+## Status (Sat 14 Nov, 13:30)
 
-| Level 8 | Margin per week |
-|---|---|
-| Official starter | −€60,442 (never ranked) |
-| **Our `l8`**, 30 test weeks | **€10,687**, all ranked, worst week 91.5% on time |
-| Practice round "Saturday 09:00" (previous `l8`) | €9,400: rank 28 of 36 |
-| 10th / 1st place in that round | €13,744 / €15,515 |
+| Level 8 | Margin per week | Orders per week |
+|---|---|---|
+| Official starter | −€60,442 (never ranked) | |
+| `l8`, 30 test weeks | €10,687, worst week 91.5% on time | ~275 |
+| **`l8_plan`**, ranking round "Saturday 12:00" | **€14,282**, worst week 94.9% on time (€71,409 for 5 weeks) | **373** |
+| 10th / 1st place in that round | €17,583 / €19,798 | ~430–470 |
 
-**The gap is volume:** the top teams win ~400 orders a week, we win ~255, at the same margin per order (€35–40). Details, findings and next steps: [PROGRESS.md](PROGRESS.md).
+**The gap is still volume:** the top teams win ~450 orders a week at €40–43 each; we win 373 at €38. We stay well above 90% on time, so we can afford to take more. Details and next steps: [PROGRESS.md](PROGRESS.md).
 
 ## Team and rules
 
@@ -164,7 +172,7 @@ Compare with `l8`: €99,661 on the tuning weeks, €104,324 on `l8x`, €116,61
 | Testing, evaluation, presentation | Everyone | `evaluate.py`, `tests/`, `analysis/` |
 
 - **One change at a time**, benchmarked on the same weeks, and logged in `LESSONS.md`. Keep it only if margin rises and every week stays ≥ 91% on time.
-- **At most one benchmark at a time:** the team has 8 world slots, and `evaluate.py` uses 6.
+- **At most one benchmark at a time:** the team has 8 world slots, and `evaluate.py` uses at most 4, leaving 4 for others.
 - **Run the tests before merging.** Never commit `.env`.
 
 ## Links

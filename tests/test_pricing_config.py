@@ -11,8 +11,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config  # noqa: E402
 import pricing  # noqa: E402
-from config import DEFAULT, PRESETS, Params, from_overrides  # noqa: E402
-from dispatch import fee_schedule, steep_schedule  # noqa: E402
+from config import DAY, DEFAULT, HOUR, PRESETS, Params, from_overrides  # noqa: E402
+from dispatch import Desk, fee_schedule, next_plan_at, steep_schedule  # noqa: E402
 
 NOON = 12 * 60  # Monday 12:00
 
@@ -123,6 +123,14 @@ class Fees(unittest.TestCase):
         self.assertTrue(all(isinstance(f, int) for f in fees))
 
 
+class Plan(unittest.TestCase):
+    def test_plans_from_07_to_19_every_n_hours(self):
+        self.assertEqual(next_plan_at(0, 3), 7 * HOUR)  # Monday 00:00 -> 07:00
+        self.assertEqual(next_plan_at(7 * HOUR, 3), 10 * HOUR)  # strictly after now
+        self.assertEqual(next_plan_at(18 * HOUR, 3), 19 * HOUR)
+        self.assertEqual(next_plan_at(19 * HOUR, 3), DAY + 7 * HOUR)  # after 19:00 -> next day 07:00
+
+
 class Config(unittest.TestCase):
     def test_overrides_use_field_types_not_preset_values(self):
         p = from_overrides(["decline_km=450.5", "raise_steps=4"], PRESETS["l8"])
@@ -135,8 +143,32 @@ class Config(unittest.TestCase):
             from_overrides(["nope=1"])
 
     def test_presets_exist(self):
-        self.assertEqual(set(config.PRESETS), {"starter", "l1", "l8", "l8_v3", "l8_v2", "l8_v1"})
+        self.assertEqual(set(config.PRESETS), {"starter", "l1", "l8", "l8_plan", "l8_v3", "l8_v2", "l8_v1"})
         self.assertIs(PRESETS["starter"], DEFAULT)
+
+
+class Outage(unittest.TestCase):
+    """The desk calls it an outage when it wins most of today's quotes near the pickup (Params.outage_*)."""
+
+    def setUp(self):
+        roads = {("a", "a"): {"km": 0}, ("a", "b"): {"km": 50}, ("a", "c"): {"km": 300}}
+        self.desk = Desk(None, 8, 0, Params(outage_add=0.3, outage_n=4, outage_rate=0.75), roads)
+        self.tuesday_10 = DAY + 10 * HOUR
+
+    def request(self, at):
+        return {"arrivedAt": at, "legs": [{"pickup": {"placeId": "a"}}]}
+
+    def test_won_most_quotes_nearby(self):
+        self.desk.answers = [(self.tuesday_10 - 60, "b", True)] * 3 + [(self.tuesday_10 - 60, "a", False)]
+        self.assertTrue(self.desk.outage_near(self.request(self.tuesday_10)))
+
+    def test_not_enough_answers_far_away_or_other_day(self):
+        self.desk.answers = [(self.tuesday_10 - 60, "b", True)] * 3 + [(self.tuesday_10 - 60, "c", True)]
+        self.assertFalse(self.desk.outage_near(self.request(self.tuesday_10)))  # c is 300 km away
+        self.desk.answers = [(self.tuesday_10 - DAY, "b", True)] * 4  # yesterday
+        self.assertFalse(self.desk.outage_near(self.request(self.tuesday_10)))
+        self.desk.answers = [(self.tuesday_10 - 60, "b", True)] * 4
+        self.assertFalse(self.desk.outage_near(self.request(DAY + 19 * HOUR)))  # outages end at 18:00
 
 
 if __name__ == "__main__":

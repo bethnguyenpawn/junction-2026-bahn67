@@ -150,6 +150,7 @@ class Desk:
         self.adapt = 0.0  # price adjustment steered by our recent win rate (Params.adapt_*)
         self.priced: set[str] = set()  # requests we quoted to win (not declined)
         self.market = 0.0  # learned competitor price level this week, x list (Params.market_lr)
+        self.answers: list[tuple[int, str, bool]] = []  # (arrived at, pickup place, won) of answered real quotes
         self.expected: dict[str, float] = {}  # request id -> the model's win chance for our quote
         self.dealer_requests: dict[str, int] = {}  # dealer id -> price requests seen this week
         self.last_seen: dict[str, int] = {}  # driver id -> minute they last viewed one of our gigs
@@ -164,6 +165,9 @@ class Desk:
         self.trust: dict[str, int] = {}  # dealer id -> our on-time orders it counts (level 8 dealer trust)
         self.trust_state: dict[str, str] = {}  # order id -> "counted" | "late"
         self.first_posted: dict[str, int] = {}  # order id -> minute its first gig was posted
+        self.posted_at: dict[str, int] = {}  # gig id -> minute we posted it
+        self.held: dict[str, None] = {}  # won orders not posted yet, waiting for the next plan (Params.plan_every_h)
+        self.next_plan = 0  # minute of the next batch plan
 
     def rejoin(self, snapshot: DeskSnapshot, history: list[DeskEvent]) -> None:
         """Rebuilds state from the world after a restart, then answers what was missed."""
@@ -217,7 +221,7 @@ class Desk:
         elif kind == "order_changed":
             self.change(event["order"])
         elif kind == "order_cancelled":
-            for books in (self.orders, self.leg_gigs):
+            for books in (self.orders, self.leg_gigs, self.held):
                 books.pop(event["orderId"], None)
         elif kind == "visit_failed":
             self.retry(event["orderId"], event["leg"], event["reason"])
@@ -279,6 +283,8 @@ class Desk:
             dealer_requests=self.dealer_requests[dealer],
             monday=request["arrivedAt"] // DAY == 0,
             market=self.market,
+            outage=self.outage_near(request),
+            war=self.price_war(request),
         )
         prices = pricing.quote(request, self.level, self.p, situation)
         if prices and not pricing.is_decline(request, prices):
@@ -290,11 +296,35 @@ class Desk:
 
     def learn(self, request_id: str, won: bool) -> None:
         """Learns the week's price level from each answer to a real quote, and the win-rate steering (off)."""
+        request = self.requests.get(request_id)
+        if request is not None and request_id in self.priced:
+            self.answers.append((request["arrivedAt"], request["legs"][0]["pickup"]["placeId"], won))
         expected = self.expected.pop(request_id, None)
         if expected is not None:  # won more than the model expects = the competitor is dearer this week
             p = self.p
             self.market = min(p.market_hi, max(p.market_lo, self.market + p.market_lr * (won - expected)))
         self.steer(request_id, won)
+
+    def outage_near(self, request: PriceRequest) -> bool:
+        """True when, today between 08 and 18, we won at least outage_rate of at least outage_n answered quotes with a
+        pickup within outage_km: the competitor is likely down there and dealers pay its dearer backup."""
+        p, at = self.p, request["arrivedAt"]
+        if not p.outage_add or not 8 * HOUR <= at % DAY < 18 * HOUR:
+            return False
+        place, start = request["legs"][0]["pickup"]["placeId"], at // DAY * DAY + 8 * HOUR
+        near = [
+            won for arrived, pickup, won in self.answers if arrived >= start and self.km(place, pickup) <= p.outage_km
+        ]
+        return len(near) >= p.outage_n and sum(near) >= p.outage_rate * len(near)
+
+    def price_war(self, request: PriceRequest) -> bool:
+        """True when, today (Tue-Fri) from 08:00 to 18:00, we won less than war_rate of at least war_n answered quotes:
+        the competitor's price-war day."""
+        p, at = self.p, request["arrivedAt"]
+        if not p.war_cut or at < DAY or not 8 * HOUR <= at % DAY < 18 * HOUR:
+            return False
+        today = [won for arrived, _, won in self.answers if arrived >= at // DAY * DAY + 8 * HOUR]
+        return len(today) >= p.war_n and sum(today) < p.war_rate * len(today)
 
     def steer(self, request_id: str, won: bool) -> None:
         """Win-rate steering: each answer to a real quote moves the price a step, so that over time we win
@@ -309,21 +339,89 @@ class Desk:
             self.adapt = max(p.adapt_lo, self.adapt - p.adapt_step * p.adapt_target)
 
     def backlog(self) -> int:
-        """Won orders with an undelivered car that no driver holds."""
+        """Won orders with an undelivered car that no driver holds (held orders are planned, not stuck)."""
         return self.backlog_count() if self.p.backlog_k else 0
 
     def backlog_count(self) -> int:
         return sum(
             1
             for oid, order in self.orders.items()
-            if undelivered(order) and not any(g in self.booked for g in self.gigs_of(oid))
+            if undelivered(order) and oid not in self.held and not any(g in self.booked for g in self.gigs_of(oid))
         )
 
     def win(self, order: Order) -> None:
         if order["id"] in self.requests and order["id"] not in self.orders:
             self.orders[order["id"]] = order
-            if not (self.p.pair_fee and self.pair(order)):
+            if self.p.plan_every_h and self.holdable(order["id"]):
+                self.held[order["id"]] = None
+            elif not (self.p.pair_fee and self.pair(order)):
                 self.post(order, undelivered(order))
+
+    def holdable(self, order_id: str) -> bool:
+        """A plain one-car order with at least hold_h hours until its latest pickup can wait for the next plan."""
+        order = self.orders[order_id]
+        return (
+            order_id not in self.urgent
+            and order["lastPickupAt"] - self.now >= self.p.hold_h * HOUR
+            and self.single_stops(order_id) is not None
+        )
+
+    def plan(self) -> None:
+        """Batch plan: pairs the held cars into two-car gigs (round trips first, then the shortest link), and posts
+        alone each held car that can no longer wait for the next plan."""
+        p = self.p
+        self.next_plan = next_plan_at(self.now, p.plan_every_h)
+        stops_of = {oid: self.single_stops(oid) for oid in self.held if oid in self.orders}
+        held = {oid: stops for oid, stops in stops_of.items() if stops is not None}
+        options = []
+        for a, first in held.items():
+            for b, second in held.items():
+                if a == b:
+                    continue
+                link = self.chain_minutes(first, second)
+                if link is None:
+                    continue
+                home = self.km(
+                    self.orders[b]["legs"][0]["delivery"]["placeId"], self.orders[a]["legs"][0]["pickup"]["placeId"]
+                )
+                options.append((home > p.pair_km, link, a, b, first + second))
+        paired: set[str] = set()
+        for _, _, a, b, stops in sorted(options, key=lambda o: o[:2]):
+            if a not in paired and b not in paired:
+                paired |= {a, b}
+                self.post_pair(stops, (a, b))
+        for oid in list(self.held):
+            order = self.orders.get(oid)
+            if order is None:
+                self.held.pop(oid)
+            elif oid not in paired and order["lastPickupAt"] - self.next_plan < (p.wait_h or p.hold_h) * HOUR:
+                self.post(order, undelivered(order))
+
+    def post_pair(self, stops: list[StopRef], order_ids: tuple[str, str]) -> None:
+        """One gig for two one-car orders, at fees_for (pair_fee x both typical fees)."""
+        for oid in order_ids:
+            self.held.pop(oid, None)
+            self.first_posted.setdefault(oid, self.now)
+        premium = any(leg["car"]["premium"] for oid in order_ids for leg in self.orders[oid]["legs"])
+        self.outbox.append(
+            {
+                "type": "post",
+                "stops": stops,
+                "audience": {"experienced": premium, "manualLicence": False},
+                "schedule": self.fees_for(stops),
+            }
+        )
+
+    def wake_at(self) -> float:
+        """The next minute the desk wants to act without an event: the ladder's tick or the next plan."""
+        at = float("inf")
+        if self.p.ladder_per_hour > 0:
+            at = self.now + self.p.tick_min
+        if self.p.plan_every_h:
+            at = min(at, max(self.next_plan, self.now + 1))
+        if self.p.split_after_min:
+            at = min(at, self.now + 30)  # check for unbooked pairs every half hour
+        return at
 
     def pair(self, order: Order) -> bool:
         """Puts a new one-car order in one gig with a waiting one-car gig, when one driver can deliver both
@@ -438,9 +536,14 @@ class Desk:
         if order is None:
             return
         self.urgent.add(order_id)
+        if order_id in self.held:  # held for a plan: post it now, at the steep fees
+            self.post(order, undelivered(order))
+            return
         self.send_post_of(order_id)
         for gig_id in self.gigs_of(order_id):
-            if gig_id not in self.booked:
+            if gig_id not in self.booked and self.p.split_after_min and self.is_pair(gig_id):
+                self.split(gig_id)  # a pair whose car is now urgent: one gig per car, at the steep fees
+            elif gig_id not in self.booked:
                 new = self.fees_for(self.posts[gig_id]["stops"])
                 self.outbox.append({"type": "reprice", "gigId": gig_id, "schedule": new})
                 self.posts[gig_id] = {**self.posts[gig_id], "schedule": new}
@@ -487,7 +590,11 @@ class Desk:
         return min(self.p.ladder_cap, self.p.open_mult + self.p.ladder_per_hour * hours)
 
     def tick(self) -> None:
-        """Raises the fee of every unbooked, non-urgent gig to the ladder's current target."""
+        """Runs the batch plan when due, and raises the fee of every unbooked, non-urgent gig to the ladder's target."""
+        if self.p.plan_every_h and self.now >= self.next_plan:
+            self.plan()
+        if self.p.split_after_min:
+            self.split_stale_pairs()
         if self.p.ladder_per_hour <= 0:
             return
         for order_id in list(self.orders):
@@ -525,6 +632,7 @@ class Desk:
             "manualLicence": retry.manual_licence,
         }
         stops = without_windows(stops_for(order, legs, self.requests[order["id"]]["note"], retry), self.now)
+        self.held.pop(order["id"], None)
         self.first_posted.setdefault(order["id"], self.now)
         self.outbox.append(
             {
@@ -549,6 +657,31 @@ class Desk:
         for stop in action["stops"]:
             self.leg_gigs.setdefault(stop["orderId"], {})[stop["leg"]] = gig_id
         self.posts[gig_id] = action
+        self.posted_at[gig_id] = self.now
+
+    def split(self, gig_id: str) -> None:
+        """Withdraws an unbooked two-car gig and posts each car alone: a pair must never leave two cars without
+        a driver."""
+        order_ids = list(dict.fromkeys(stop["orderId"] for stop in self.posts[gig_id]["stops"]))
+        self.send()  # the withdraw goes alone, so we know whether it worked
+        if self.world.act([{"type": "withdraw", "gigId": gig_id}])[0]["ok"] is not True:
+            return  # a driver booked it meanwhile: keep the pair
+        for oid in order_ids:
+            self.leg_gigs.pop(oid, None)
+        for oid in order_ids:
+            if oid in self.orders:
+                self.post(self.orders[oid], undelivered(self.orders[oid]))
+
+    def split_stale_pairs(self) -> None:
+        """Splits every two-car gig that no driver booked within split_after_min."""
+        for gig_id, action in list(self.posts.items()):
+            if (
+                gig_id not in self.booked
+                and self.is_pair(gig_id)
+                and self.now - self.posted_at.get(gig_id, self.now) >= self.p.split_after_min
+                and self.is_live(gig_id)
+            ):
+                self.split(gig_id)
 
     def withdraw(self, order_id: str) -> bool:
         """Withdraws an order's gigs. False, and nothing withdrawn, when a driver holds one."""
@@ -637,6 +770,10 @@ class Desk:
         self.offers_open.setdefault(other_id, []).append(self.now)
         self.outbox.append({"type": "offer", "gigId": other_id, "driverId": driver["id"], "feeCents": fee})
 
+    def is_pair(self, gig_id: str) -> bool:
+        """True for a gig that carries cars of more than one order (a two-car gig from plan or pair)."""
+        return len({stop["orderId"] for stop in self.posts[gig_id]["stops"]}) > 1
+
     def is_live(self, gig_id: str) -> bool:
         """True while the gig still carries one of its legs (not replaced by a repost, not withdrawn)."""
         return any(
@@ -654,6 +791,17 @@ class Desk:
     def km(self, a: str, b: str) -> float:
         road = self.roads.get((a, b))
         return road["km"] if road else float("inf")
+
+
+def next_plan_at(now: int, every_h: float) -> int:
+    """The next batch-plan minute after now: 07:00, then every every_h hours until 19:00, each day."""
+    day, minute = now // DAY, now % DAY
+    t = 7 * HOUR
+    while t <= 19 * HOUR:
+        if t > minute:
+            return day * DAY + t
+        t += int(every_h * HOUR)
+    return (day + 1) * DAY + 7 * HOUR
 
 
 def current_fee(schedule: list[FeeStep], now: int) -> int:

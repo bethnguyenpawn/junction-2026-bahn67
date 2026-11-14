@@ -41,6 +41,8 @@ class Situation(NamedTuple):
     near: int | None = None  # drivers living within 30 km of the pickup (None = unknown)
     near_delivery: int | None = None  # ... of the delivery place
     adapt: float = 0.0  # win-rate adjustment (Params.adapt_*)
+    outage: bool = False  # the competitor looks down near the pickup (Params.outage_*)
+    war: bool = False  # the competitor looks 20% cheaper today (Params.war_*)
     market: float = 0.0  # this week's competitor price level vs the model's average, x list (Params.market_lr)
     dealer_requests: int = 0  # requests this dealer has sent this week, this one included
     monday: bool = False
@@ -95,6 +97,10 @@ def flat_mult(request: PriceRequest, level: int, params: Params, s: Situation) -
         mult += p.cost_k * (request["referenceFeeCents"] / request["options"][0]["listPriceCents"] - p.cost_mid)
     if s.monday:
         mult += p.monday_add
+    if s.outage:
+        mult += p.outage_add
+    if s.war:
+        mult -= p.war_cut
     if p.dest_k:
         mult += p.dest_k * DEST_OFFSET.get(request["legs"][0]["delivery"]["placeId"], 0.0)
     if p.private_add and private(request):

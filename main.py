@@ -70,9 +70,7 @@ def play_practice(world: World, level: int, params: Params, verbose: bool = True
     while desk.now < ends_at:
         day, midnight = desk.now // DAY, (desk.now // DAY + 1) * DAY
         actions, desk.outbox = desk.outbox, []
-        stop_at = min(ends_at, midnight)
-        if params.ladder_per_hour > 0:
-            stop_at = min(stop_at, desk.now + params.tick_min)
+        stop_at = int(min(ends_at, midnight, desk.wake_at()))
         step = world.advance(until=wake_on(params), max=stop_at, actions=actions)
         desk.read_results(actions, step["results"])
         desk.now = step["now"]

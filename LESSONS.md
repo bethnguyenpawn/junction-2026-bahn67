@@ -1,8 +1,8 @@
 # Lessons: experiment log
 
 **Summary.** Level 1: a fee ladder by reprice (open 0.7×, +0.3×/h) turns −€28,978 into +€34,186 per 10 weeks.
-Level 8 (the final): five pricing/fee rules (Experiments 3–7) turn −€604,425 into +€79,155 (and +€82,446 on unseen weeks), 20/20 weeks ranked.
-What did not work: a flat lower fee at level 1 (too many late cars); the level-1 ladder at level 8; higher opening fees to fix lateness at level 8; declining > 400 km (too many good orders lost).
+Level 8 (the final): pricing and fee rules (Exp. 3–21, 30) turn the starter's −€60,442/week into ~€10,700/week (`l8`); batch planning of two-car gigs (Exp. 37, `l8_plan`) adds ~45% more orders: €71,409 in the 5-week ranking round "Saturday 12:00", every week ≥ 94.9% on time.
+What did not work: most price ideas after Exp. 30 (trust, weekdays, outage/price-war days, learning the market, expected-profit pricing); direct offers to drivers; posting two-car gigs as soon as cars are won (Exp. 24, pairs too rare).
 
 Every experiment: level 1, seeds `l1-a` … `l1-j` (10 weeks), one change at a time. Raw numbers in `results/log.jsonl`.
 Keep a change only if total margin rises AND every week stays well above 90% on time.
@@ -501,3 +501,60 @@ Played `l8-a` to Wednesday 12:00, threw the desk away, rebuilt it with `Desk.rej
 | fee 1.1×, ≤ 150 km | 104 | **1** | 52 | 48 | €13,140 |
 
 - **Lesson:** drivers who have just delivered don't take a second gig from us: half don't read the offer, half say no, even above the app's fee. Same as Exp. 18: direct offers don't work in this world for us. Not benchmarked further.
+
+## Experiment 34: outage pricing ✗
+
+- **Data** (our `l8` weeks, quotes 08–18 by day and region within 80 km of a town): the outage is easy to see. `l8-a` Tuesday around Helsinki/Vantaa: we won 97 of 114 quotes (85%) vs 32% there on other days; `l8-d` Thursday around Helsinki/Espoo: 86 of 96 (90%) vs 36%. The backup costs ~30% more than the competitor, so we sell those cars ~0.3–0.5× list too cheap (≈ 100 orders/week). The price war shows too (`l8-c` Tuesday: 13% won vs ~45%).
+- **Rule** (`outage_add`, off): today 08–18, if we won ≥ `outage_rate` (0.75) of ≥ `outage_n` (8) answered quotes with a pickup within `outage_km` (100 road km), add `outage_add` to the price. `Desk.outage_near`, unit-tested.
+
+| `l8` + outage_add | l8 | Worst |
+|---|---|---|
+| 0 (`l8`) | €99,661 | 95.4% |
+| 0.3 | €97,773 | 96.0% |
+| 0.1 | €99,480 | 95.8% |
+
+- **Trace** (`l8-a`, +0.3): the detector fires only on the real outage day (Tuesday, 41 quotes), but there we won 17 of 41 instead of ~85%: the backup is not much dearer than our usual price there (Helsinki region quotes are already low: dense −0.2, Vantaa −0.17). We also won fewer orders Wed–Fri: outage wins build trust with the big Helsinki dealers.
+- **Lesson:** the outage is easy to detect but not worth a higher price; its wins are worth more as trust. Code kept, off.
+
+## Experiment 35: price-war response ✗ (neutral)
+
+- **Rule** (`war_cut`, off; `Desk.price_war`): Tue–Fri 08–18, when we won < 15% of ≥ 15 answered quotes today, quote `war_cut` cheaper for the rest of the day.
+- **Result:** −0.2× → €99,840 on l8 (vs €99,661), worst week 95.4%. Most weeks never trigger it; `l8-c`, the clearest price-war week, got worse (€13,143 vs €13,608). In the war the competitor is at ~1.0–1.2× list: even −0.2× doesn't win those orders at a profit.
+- **Lesson:** like the outage (Exp. 34), the event is easy to see but not worth reacting to with price.
+
+## Experiment 36: where the money goes; opening fee recheck
+
+- **Per week on `l8`** (10 weeks): revenue €26,883, driver fees −€16,288 (61%), failed visits −€265, late refunds −€261, other −€102 → margin €9,966. 275 orders, median order €31; 15 orders/week lose money (−€534); only 8/week late or undelivered (−€290 directly). So lateness is small money; revenue vs. driver fees is everything.
+- **Opening fee on today's `l8`:** 0.75× €95,062, **0.8× €99,661 (kept)**, 0.85× €98,811.
+- **The 15 money-losing orders a week** (−€534) have no pattern we can see at quote time. Of 152 in 10 weeks: 52 were late, 48 had a failed visit, and their fee was 1.3× typical (median; all orders 0.9×). They are spread over every distance, option and address type (short trips under 100 km: 5.8% lose money vs. 5.5% overall). They go wrong after we win them, so declining can't fix them.
+
+## Experiment 37: batch planning of two-car gigs ✓ adopted (`--preset l8_plan`, +11% and +52% in ranking)
+
+- **Why:** the top teams win ~450 orders/week at €40–43 each; we win ~275 at €36, and at a lower price our margin per order falls to €24. So their driver cost per car is far lower. In our weeks 85% of won cars could share a driver with another (car B's pickup ≤ 30 km from car A's delivery, on time, ≤ 12 h driving), but Exp. 24 formed only ~35 pairs/week: we posted every car at once and drivers booked it before a partner came.
+- **Rule** (`plan_every_h` etc., `Desk.plan`): hold plain one-car orders with ≥ `hold_h` (8) hours to their latest pickup; every 3 h from 07:00 to 19:00 pair the held cars (round trips first, then the shortest link) into two-car gigs at `pair_fee` × both typical fees. An unpaired car waits for the next plan only with ≥ `wait_h` hours to spare, else it is posted alone. A pair no driver books within `split_after_min` (or whose car gets a deadline warning) is withdrawn and posted as two gigs (the withdraw goes alone first, so a pair a driver just booked is kept). Held orders don't count in the backlog brake.
+- **Diagnosis** (`l8x-g`): pairs are booked within a median of 1 minute; held cars posted alone after waiting were late 19% (median 9 h to find a driver). Hence `wait_h`.
+
+| `l8` + plan 3 h, link ≤ 30 km, … | l8 | l8x | Worst |
+|---|---|---|---|
+| none (`l8`) | €99,661 | €104,324 | 91.5% |
+| pair fee 0.8 | €109,842 | | 91.4% |
+| pair fee 0.9, margin 4 h | €110,847 | €110,817 | **86.0%** ✗ (3 weeks < 90% on l8x) |
+| … split after 120 min | | €115,240 | 86.9% ✗ |
+| … split after 60 min | | €114,024 | 89.6% ✗ |
+| … split 120, wait_h 16 | | €119,898 | 89.9% ✗ |
+| **… split 120, wait_h 24 (`l8_plan`)** | not run | **€116,121** | **93.2%** ✓ |
+
+- **Ranking round "Saturday 12:00"** (5 fresh weeks, played by the user with `l8_plan`):
+
+| Week | Margin | Orders | On time | Not delivered |
+|---|---|---|---|---|
+| 1 | €15,875 | 389 | 97.2% | 0.0% |
+| 2 | €15,392 | 387 | 95.9% | 0.0% |
+| 3 | €10,435 | 332 | 94.9% | 0.6% |
+| 4 | €15,830 | 403 | 95.8% | 0.0% |
+| 5 | €13,878 | 353 | 95.2% | 0.8% |
+| **Total** | **€71,409** (Saturday 09:00 with `l8_v3`: €47,002) | 373/week (was ~255) | worst 94.9% | |
+
+  Round leaders at the time: 1st €98,990, 10th €87,915, House best €77,560. The top 10 win ~430–470 orders/week at €40–43 each; we now win 373 at €38.
+- **Lesson:** sharing drivers was the lever, not price. Planning lifts volume ~45% at the same margin per order, and on-time stays 95–97%, so there is now room to win more.
+- **Open:** the `l8` and `l8y` benchmark weeks were never run with `l8_plan` (the 5 ranking weeks served as the fresh-week check). A lower `pair_fee` (pairs book in 1 minute) is untested.
