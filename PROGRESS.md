@@ -99,7 +99,7 @@ Still 42% of cars travel alone (140/week at €68 vs €42 shared): held > 24 h 
 
 **Keys:** the final and the submission are played with the `bahn67` key in `.env`.
 
-**Branches:** we play `otso/level1-baseline`. `main` has Anh's older Friday version (kit starter + hand-made pricing, not benchmarked); don't merge it into our branch before the final. After the final, merge our branch into `main` for the submission.
+**Branches:** we play `bahn67-final`. `main` has Anh's older Friday version (kit starter + hand-made pricing, not benchmarked); don't merge it into our branch before the final. After the final, merge our branch into `main` for the submission.
 
 ## Deadlines
 

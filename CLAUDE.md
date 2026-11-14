@@ -43,7 +43,7 @@ Scripts load `.env` themselves (`main.load_env`). Use `.venv/bin/python`, not sy
 - **Never create ranking runs (`board: true`) without the user's explicit OK.** They're limited (5/level/round), can't be revealed, deletion still counts.
 - Don't delete worlds that aren't ours / still running for teammates. Our evaluate runs finish their worlds.
 - **Experiments:** one parameter change at a time, same 10 seeds, then add a row to `LESSONS.md` (idea / why / effect). Keep a change only if margin rises AND every week stays well above 90% (target worst week ≥ 91%).
-- **Git:** remote is SSH with a YubiKey → the user runs `git fetch` / `git push` themselves (`! git ...`); merge locally after their fetch. We work on branch `otso/level1-baseline` (no PR for now); don't commit to `main` directly. Commit only when asked. Remote: `git@github.com:bethnguyenpawn/junction-2026-bahn67.git`.
+- **Git:** remote is SSH with a YubiKey → the user runs `git fetch` / `git push` themselves (`! git ...`); merge locally after their fetch. We work on branch `bahn67-final` (no PR for now); don't commit to `main` directly. Commit only when asked. Remote: `git@github.com:bethnguyenpawn/junction-2026-bahn67.git`.
 - Report numbers, not prose. The user prefers short, plain explanations.
 
 ## Current best

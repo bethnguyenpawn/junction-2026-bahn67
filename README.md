@@ -17,7 +17,7 @@ You need Python 3.9+ and git.
 ```bash
 git clone git@github.com:bethnguyenpawn/junction-2026-bahn67.git
 cd junction-2026-bahn67
-git checkout otso/level1-baseline        # our working branch
+git checkout bahn67-final        # our working branch
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt          # the official Spread kit + numpy
