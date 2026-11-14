@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections import deque
 from typing import NamedTuple
 
 from spread.client import World
@@ -126,6 +127,108 @@ class Retry(NamedTuple):
     pickup_from: int = 0
     manual_licence: bool = False
     plates: bool = False
+
+
+def maximum_cardinality_matching(adjacency: list[list[int]]) -> list[tuple[int, int]]:
+    """Return a maximum set of disjoint edges in an undirected graph (Edmonds blossom).
+
+    The input neighbor order is retained for deterministic tie-breaking between equally large
+    matchings. Invalid indexes and self-edges are ignored.
+    """
+    n = len(adjacency)
+    graph: list[list[int]] = [[] for _ in range(n)]
+    for v, neighbors in enumerate(adjacency):
+        for u in neighbors:
+            if not 0 <= u < n or u == v:
+                continue
+            if u not in graph[v]:
+                graph[v].append(u)
+            if v not in graph[u]:
+                graph[u].append(v)
+
+    match = [-1] * n
+
+    def lowest_common_ancestor(a: int, b: int, parent: list[int], base: list[int]) -> int:
+        path = [False] * n
+        while True:
+            a = base[a]
+            path[a] = True
+            if match[a] == -1:
+                break
+            a = parent[match[a]]
+        while True:
+            b = base[b]
+            if path[b]:
+                return b
+            b = parent[match[b]]
+
+    def mark_blossom_path(
+        v: int,
+        blossom_base: int,
+        child: int,
+        blossom: list[bool],
+        parent: list[int],
+        base: list[int],
+    ) -> None:
+        while base[v] != blossom_base:
+            mate = match[v]
+            if mate == -1:
+                return
+            blossom[base[v]] = True
+            blossom[base[mate]] = True
+            parent[v] = child
+            child = mate
+            v = parent[mate]
+
+    def augment_from(root: int) -> bool:
+        parent = [-1] * n
+        base = list(range(n))
+        used = [False] * n
+        queue = deque([root])
+        used[root] = True
+        endpoint = -1
+
+        while queue and endpoint == -1:
+            v = queue.popleft()
+            for u in graph[v]:
+                if base[v] == base[u] or match[v] == u:
+                    continue
+                if u == root or (match[u] != -1 and parent[match[u]] != -1):
+                    blossom_base = lowest_common_ancestor(v, u, parent, base)
+                    blossom = [False] * n
+                    mark_blossom_path(v, blossom_base, u, blossom, parent, base)
+                    mark_blossom_path(u, blossom_base, v, blossom, parent, base)
+                    for i in range(n):
+                        if blossom[base[i]]:
+                            base[i] = blossom_base
+                            if not used[i]:
+                                used[i] = True
+                                queue.append(i)
+                elif parent[u] == -1:
+                    parent[u] = v
+                    if match[u] == -1:
+                        endpoint = u
+                        break
+                    mate = match[u]
+                    used[mate] = True
+                    queue.append(mate)
+
+        if endpoint == -1:
+            return False
+        v = endpoint
+        while v != -1:
+            previous = parent[v]
+            next_v = match[previous] if previous != -1 else -1
+            match[v] = previous
+            if previous != -1:
+                match[previous] = v
+            v = next_v
+        return True
+
+    for root in range(n):
+        if match[root] == -1:
+            augment_from(root)
+    return [(v, mate) for v, mate in enumerate(match) if v < mate]
 
 
 class Desk:
@@ -382,7 +485,14 @@ class Desk:
                 self.post(order, undelivered(order))
 
     def plan_pairs(self, held: dict[str, list[StopRef]]) -> set[str]:
-        """Pairs held cars into two-car gigs, round trips first, then the shortest link. Returns the paired cars."""
+        """Pairs held cars into two-car gigs, round trips first, then the shortest link (pair_match: the largest set
+        of pairs). Returns the paired cars."""
+        if self.p.pair_match:
+            paired: set[str] = set()
+            for a, b in self.match_pairs(held):
+                paired |= {a, b}
+                self.post_pair(held[a] + held[b], (a, b))
+            return paired
         p = self.p
         options = []
         for a, first in held.items():
@@ -464,6 +574,32 @@ class Desk:
                     lone[oid] = (gig_id, stops)
         return lone
 
+    def match_pairs(self, cars: dict[str, list[StopRef]]) -> list[tuple[str, str]]:
+        """The largest set of disjoint feasible pairs (Edmonds' blossom matching), each in its better order (round
+        trip first, then the shorter link), best first. Greedy pairing can take one pair that blocks two others."""
+        ids = list(cars)
+        best: dict[tuple[int, int], tuple[tuple, str, str]] = {}
+        neighbors: list[list[tuple[tuple, int]]] = [[] for _ in ids]
+        for i, a in enumerate(ids):
+            for j in range(i + 1, len(ids)):
+                b = ids[j]
+                choices = []
+                for first, second in ((a, b), (b, a)):
+                    link = self.chain_minutes(cars[first], cars[second])
+                    if link is not None:
+                        home = self.km(
+                            self.orders[second]["legs"][0]["delivery"]["placeId"],
+                            self.orders[first]["legs"][0]["pickup"]["placeId"],
+                        )
+                        choices.append(((home > self.p.pair_km, link, first, second), first, second))
+                if choices:
+                    best[(i, j)] = min(choices)
+                    neighbors[i].append((best[(i, j)][0], j))
+                    neighbors[j].append((best[(i, j)][0], i))
+        adjacency = [[j for _, j in sorted(row)] for row in neighbors]
+        chosen = sorted(best[(min(i, j), max(i, j))] for i, j in maximum_cardinality_matching(adjacency))
+        return [(first, second) for _, first, second in chosen]
+
     def build_chains(self, cars: dict[str, list[StopRef]]) -> list[list[str]]:
         """Greedy chaining: repeatedly joins the two chains with the best link (a round trip home first, then the
         shortest empty drive) while one driver can still do the whole chain on time (chain_fits)."""
@@ -481,6 +617,11 @@ class Desk:
         }
         chains = {oid: [oid] for oid in cars}  # head car -> chain
         tail_of = {oid: oid for oid in cars}  # head car -> its tail car
+        if p.chain_match:  # start from the largest set of pairs, then grow them into longer chains
+            for first, second in self.match_pairs(cars):
+                chains[first] = [first, second]
+                tail_of[first] = second
+                del chains[second], tail_of[second]
         while True:
             best = None
             for head, chain in chains.items():

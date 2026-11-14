@@ -64,7 +64,7 @@ Ranking round: one person runs `for i in 1 2 3 4 5; do .venv/bin/python main.py 
 **Biggest lever: driver cost per car.** A car sharing a driver costs ~0.77× its typical fee, a car alone ~1.06×.
 
 1. **Chain dispatcher** (Exp. 42, candidate `--preset l8_chain` = `l8_plan2` + `chain_max=3 plan_every_h=1`): +€7.3k on the `l8` weeks (€119,744, +6.5%), worst 94.1%, 58% of cars shared. Check on `l8x` and `l8y`; if every week ≥ 91%, it replaces `l8_plan2`.
-2. **More sharing:** private addresses in chains (`chain_private=1`, coded, untested); chains of 4; a lower fee for 3-car gigs. Re-planning unbooked chains loses money (Exp. 42).
+2. **More sharing:** `l8_chain` + `chain_match=1` (the codex branch's maximum matching as the start of chains, Exp. 43; untested); private addresses in chains (`chain_private=1`, coded, untested); chains of 4; a lower fee for 3-car gigs. Re-planning unbooked chains loses money (Exp. 42).
 3. **Fewer failed visits:** 12/week cost €415, 53% `not_ready`. Check the note's ready time against the driver's arrival.
 4. **Test final Sat 20:00** and **final Sun 08:00** with the best preset that passed `l8`, `l8x` and `l8y`. Freeze the code Saturday night.
 

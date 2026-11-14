@@ -82,6 +82,8 @@ class Params:
     # (Desk.plan_chains); 0 = pairs of held cars only (Desk.plan_pairs)
     chain_replan: int = 0  # 1: a chain no driver booked within split_after_min goes back into the next plan (not split)
     chain_private: int = 0  # 1: cars to or from a private address may join chains (their slot is respected)
+    pair_match: int = 0  # 1: plan_pairs takes the largest set of pairs (Edmonds' matching) instead of greedy pairs
+    chain_match: int = 0  # 1: build_chains starts from the largest set of pairs (match_pairs), then grows chains
     # (uses pair_fee, pair_km, pair_lead_min, pair_margin_h below)
 
     # --- Normal driver fee schedule, as multiples of the request's typical fee (referenceFeeCents).
@@ -203,6 +205,9 @@ PRESETS = {
     # Previous level-8 preset (practice round "Saturday 00:00": €46,496, rank 43/62): +€79,155 / +€82,446.
     "l8_v1": Params(quote_mult=1.6, backlog_k=0.01, decline_km=500, min_slack_h=8, open_mult=0.8),
 }
+
+# Experimental l8_plan matcher: prefer the largest set of simultaneously feasible pairs.
+PRESETS["l8_plan_match"] = replace(PRESETS["l8_plan"], pair_match=1)
 
 # Experimental expected-profit pricing, based on the current lane-aware l8 quote. Use only for low-risk requests;
 # preserve the proven delivery-place, distance, deadline and driver fee rules through the flat-price fallback.

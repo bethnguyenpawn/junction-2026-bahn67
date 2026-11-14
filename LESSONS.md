@@ -654,3 +654,15 @@ The 14:00 test final showed a cheap week: at ≥ 1.45× list we won 1% of quotes
 - **Still alone with chains** (per week): no partner within 50 km and the deadlines 65 cars (€950 extra vs. shared), chain split after 2 h 29 (€599), private address 19 (€463), charging, retries, trade-ins 26 (~€620).
 - **Lesson:** wider pools and hourly plans help (+€7.3k on `l8`); re-planning unbooked chains shares more cars but churns gigs and loses money. Private addresses in chains (`chain_private=1`) not tested yet.
 - **Next:** `l8_chain` on `l8x` and `l8y`.
+
+## Experiment 43: maximum-cardinality batch matching (`pair_match`, from the codex branch)
+
+- **Opportunity:** `l8_plan` raised volume from about 255 to 373 orders/week, while the top teams win roughly 430–470. Historical analysis says 85% of our won cars could share a driver. `Desk.plan()` currently greedily takes round trips and then short links; a preferred edge can consume a car that would otherwise enable two feasible pairs.
+- **Change:** experimental `l8_plan_match` builds the same directed route/deadline-feasible options as before, represents each order as one graph vertex, and uses Edmonds blossom maximum-cardinality matching to select the largest disjoint pair set. For each selected pair it keeps the best existing orientation (round trip first, then shortest link); `l8_plan` remains on its original greedy code path.
+- **Offline validation:** the unit suite passes, including greedy-trap, odd-cycle, and preset-isolation checks. An exhaustive local comparison against brute force matched the optimum for all 33,867 undirected graphs with up to six vertices.
+- **Partial baseline:** an approved `l8_plan` run on fresh seeds `l8fresh14-a` through `j` recorded only three completed weeks before team practice capacity filled. Those three made €35,312.53 total (€11,770.84/week), with 95.76% weighted on-time, 93.77% worst week, and 3/3 ranked. This is too small to support a strategy decision; the seven missing weeks have no score.
+- **Harness fix:** `evaluate.py` now retries HTTP 409 practice-slot conflicts every ten seconds for up to five minutes, so temporary team-wide capacity pressure does not discard later seeds. Unit tests cover retry, non-capacity errors, and timeout behavior.
+- **Candidate slot attempt:** the one-seed `l8_plan_match` pilot on `l8fresh14-a` waited 327 seconds and timed out while all eight team slots remained occupied. It created no candidate world and has no score.
+- **Benchmark (Sat 17:10, `l8` weeks):** `l8_plan_match` €113,062 vs `l8_plan` €109,576 (+3.2%), worst 94.9%, 10/10 ranked. Below `l8_chain` (€119,744).
+- **Merged into `otso/level1-baseline`:** the matching is `Desk.match_pairs`; `pair_match=1` uses it for pairs of held cars, and new `chain_match=1` starts `build_chains` from the matched pairs, then grows them into chains (not benchmarked yet). The slot wait in `evaluate.py` is kept.
+- **Decision:** keep the matching as an option; chains (`l8_chain`, Exp. 42) gain more. Next: `l8_chain` + `chain_match=1` on the `l8` weeks.
