@@ -2,7 +2,7 @@
 
 Status, what we learned, and what's next. Every experiment with its numbers: [LESSONS.md](LESSONS.md) · Challenge in plain words: [docs/CHALLENGE_SUMMARY.md](docs/CHALLENGE_SUMMARY.md)
 
-## Status (Sat 14 Nov, 22:30)
+## Status (Sat 14 Nov, 22:45)
 
 **Use `--preset l8_notes`** (`l8_chain` + the note reader `notes.py`, Exp. 49) for ranking runs and the final. Fallback: `l8_chain`.
 
@@ -22,6 +22,7 @@ Status, what we learned, and what's next. Every experiment with its numbers: [LE
 | "Saturday 09:00" | `l8_v3` | €47,002 | 28 of 36 | €68,719 / €77,573 |
 | **"Saturday 12:00"** | **`l8_plan`** | **€71,409**, 373 orders/week, worst 94.9% | 32 of 51 | €89,431 / €99,211 |
 | "Saturday 15:00" (as team "slow") | `l8_plan2` | €65,689, 366 orders/week, worst 93.8% | 30 of 36 | €82,653 / €92,830 |
+| **"Saturday 21:00"** | **`l8_notes`** | **€69,561**, 361 orders/week, worst 95.0% | **26 of 40** | €83,479 / €105,424 |
 | Test final Sat 14:00 (live, Thu–Wed) | `l8_plan` | €1,365, 68 orders, 94.1% | 32 of 55 | €3,292 / €4,023 |
 | Test final Sat 20:00 (live, full week) | `l8_chain` | €12,963, 334 orders, 97.6% | 41 of 75 | €16,623 / €19,592 |
 
@@ -74,7 +75,7 @@ Ranking round: one person runs `for i in 1 2 3 4 5; do caffeinate -i .venv/bin/p
 
 Still 42% of cars travel alone (140/week at €68 vs €42 shared): held > 24 h without partner 36, chain split 30, charging stop 26, posted alone with < 24 h left 24, private address 18.5.
 
-1. **Ranking round with `l8_notes`** (00:00, 03:00 or 06:00) to see where it stands against the top 10 on the same weeks.
+1. **Close the gap to the top 10** (round 21:00: −€2.8k/week vs 10th, behind in all 5 weeks, ~+20% needed). Adopt a change before the final only if it wins > €3k on l8 + l8x with every week ≥ 91%.
 2. **Late orders left** (11.3/week): booked in time but late 3.3, driver drops 2.9, order changes 2.6, booked only after the deadline warning 1.9. Snow: post and price snow-touched orders earlier/higher.
 3. **Final Sun 09:00** with `l8_notes`. Freeze the code Saturday night.
 

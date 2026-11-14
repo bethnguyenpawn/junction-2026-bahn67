@@ -156,7 +156,7 @@ python evaluate.py --level 8 --preset l8_notes --seed-prefix l8x --set pair_fee=
 
 Compare with `l8_notes`: €125,036 on the tuning weeks, €135,759 on `l8x`, €149,830 on `l8y` (`l8_chain`: €119,744 / €132,510 / €142,551). Differences under ~€3k on 10 weeks are noise. Keep a change only if margin rises on both sets and every week stays ≥ 91% on time. Then log it in `LESSONS.md`.
 
-## Status (Sat 14 Nov, 22:30)
+## Status (Sat 14 Nov, 22:45)
 
 | Level 8 | Margin per week | Orders per week |
 |---|---|---|
@@ -169,6 +169,7 @@ Compare with `l8_notes`: €125,036 on the tuning weeks, €135,759 on `l8x`, �
 | `l8_chain`, 30 test weeks | €13,160, worst week 90.3% on time | ~350 |
 | `l8_chain`, test final Sat 20:00 (live, full week) | €12,963, 97.6% on time: rank 41 of 75 (10th €16,623, 1st €19,592) | 334 (10th: 393) |
 | **`l8_notes`**, 30 test weeks | **€13,688** (+4.0%), worst week 93.8% on time | ~350 |
+| **`l8_notes`**, ranking round "Saturday 21:00" | **€13,912**, worst week 95.0% (€69,561 for 5 weeks, **rank 26 of 40**; 10th €83,479, 1st €105,424) | 361 |
 
 **The gap is volume at the same margin:** the top 10 won 390–500 orders at €41–49 each in the 20:00 test final; we won 334 at €38.8. Every way we tried to win more (cheaper prices, long trips, a narrower backlog brake) raised our cost per car, because drivers are scarce at level 8 (Exp. 45). The biggest lever is still driver cost: a shared car costs 0.77× its typical fee, a car alone 1.06×, and 42% of our cars still go alone. Details and next steps: [PROGRESS.md](PROGRESS.md).
 
