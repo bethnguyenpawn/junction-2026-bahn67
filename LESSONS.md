@@ -869,3 +869,14 @@ Split chain (no booking within 2 h) 79, held without a partner until 24 h before
 | `early_cut=0.2` | €126,706 (−€5.3k) | €132,392 (−€8.6k) | | 94.2% |
 
 - **Result:** 0.1 is up on all three sets: **€435,238 over 30 weeks (+€6.6k, +1.5%), worst 92.9%**, 30/30 ranked → preset `l8_early`. 0.2 falls off a cliff: drivers learn how far our fees rise from the first fee they saw, so a low opening makes them wait on every gig.
+
+## Experiment 65: cheaper quotes for cars ready 12 h or more later (`early_quote_cut=0.05`, on `l8_early`) ✗
+
+- **Idea:** those cars are the cheapest and safest to move (Exp. 64), so win more of them; the top 10 win ~40 more orders a week than we do at the same margin per order (round "Sunday 00:00": us 359 at €40.4, ranks 2–10 386–443 at €36.6–42.2).
+- **Result:** l8 €131,389 (−€2.9k), l8x €143,729 (−€0.5k). The extra wins do not pay for the lower price on all the others. Off.
+- **Measured on the way** (4 traced `l8_lane` weeks): D01 (~60–110 requests a day) has trust 0–1 at Tuesday 08:00 in every week, 4–14 on Wednesday, 8–25 on Thursday (a won car is delivered ~24 h later, and we win few Monday orders). Chains of cars already ready: 35% book within 10 min, 23% between 30 and 120 min, 35% never: splitting them sooner than 2 h would lose a quarter of them.
+
+## Experiment 66: early in the week, post a big dealer's ready cars at once (`rush_n=20`, on `l8_early`) ✗
+
+- **Idea:** trust counts only on delivery, and D01 starts every Tuesday at trust 0–1 (Exp. 65). Until Wednesday 00:00 (`rush_until_h=48`), a car that is ready now from a dealer with ≥ 20 requests this week is posted at once instead of waiting for a chain partner (`Desk.rush`).
+- **Result:** l8 €134,256 (−€0.1k), l8x €141,659 (−€2.6k); on time 97.0% / 96.7% (was 96.6%). Earlier delivery does not win enough to pay for the lost chains. Off.

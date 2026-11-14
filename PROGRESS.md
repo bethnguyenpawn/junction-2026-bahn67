@@ -25,11 +25,14 @@ Status, what we learned, and what's next. Every experiment with its numbers: [LE
 | "Saturday 09:00" | `l8_v3` | €47,002 | 28 of 36 | €68,719 / €77,573 |
 | **"Saturday 12:00"** | **`l8_plan`** | **€71,409**, 373 orders/week, worst 94.9% | 32 of 51 | €89,431 / €99,211 |
 | "Saturday 15:00" (as team "slow") | `l8_plan2` | €65,689, 366 orders/week, worst 93.8% | 30 of 36 | €82,653 / €92,830 |
-| **"Saturday 21:00"** | **`l8_notes`** | **€69,561**, 361 orders/week, worst 95.0% | **26 of 40** | €83,479 / €105,424 |
+| "Saturday 21:00" | `l8_notes` | €69,561, 361 orders/week, worst 95.0% | 26 of 40 | €83,479 / €105,424 |
+| **"Sunday 00:00"** (at 00:10, 24 teams done) | **`l8_early`** | **€72,623**, 359 orders/week, €40.4/order, worst 96.7% | **17 of 24** | €79,287 / €102,582 |
 | Test final Sat 14:00 (live, Thu–Wed) | `l8_plan` | €1,365, 68 orders, 94.1% | 32 of 55 | €3,292 / €4,023 |
 | Test final Sat 20:00 (live, full week) | `l8_chain` | €12,963, 334 orders, 97.6% | 41 of 75 | €16,623 / €19,592 |
 
-**Gap:** in the 20:00 test final the top 10 won 390–500 orders at €41–49 each; we won 334 at €38.8 (+€3.7k needed, +28%). Of 1,030 requests we won 340, lost 558 on price and declined 132 (105 of them > 550 km). Winning more by any means tried tonight lowers the margin: drivers are scarce, so extra cars cost more (Exp. 45).
+**Gap (round Sunday 00:00):** −€1.3k/week to 10th (was −€2.8k in round 21:00); behind 10th in 4 of 5 weeks. Same margin per order as ranks 2–10 (€36.6–42.2), but they win 386–443 orders/week to our 359: ~40 more orders/week at our margin would reach the top 10. 1st (Juhus): 473 orders at €43.3.
+
+Earlier: in the 20:00 test final the top 10 won 390–500 orders at €41–49 each; we won 334 at €38.8 (+€3.7k needed, +28%). Of 1,030 requests we won 340, lost 558 on price and declined 132 (105 of them > 550 km). Winning more by any means tried tonight lowers the margin: drivers are scarce, so extra cars cost more (Exp. 45).
 
 Ranking round: one person runs `for i in 1 2 3 4 5; do caffeinate -i .venv/bin/python main.py --board --level 8 --preset l8_early || break; done` (only one ranking run per team at a time; a second one gets HTTP 409).
 
@@ -58,6 +61,7 @@ Ranking round: one person runs `for i in 1 2 3 4 5; do caffeinate -i .venv/bin/p
 - **Expected-profit pricing** (`opt`, fitted win and lateness models): with a full lateness penalty and trade-ins declined it is safe (worst 91.4%), but only +€2.4k over 20 weeks vs `l8`: not worth switching (Exp. 29). Pricing low to build dealer trust loses money (Exp. 29). Learning the week's price level from wins/losses: +1.3% but a fresh week at 90.6% (Exp. 31). Return-trip offers to drivers who just delivered for us: 1–3 of 41–104 accepted (Exp. 33). Outage pricing: detected reliably, but a higher price there loses orders and trust (Exp. 34). Price-war day: detected, cutting our price is neutral (Exp. 35). Guarded expected-profit pricing (`l8_guarded`, only low-risk requests, ±6% around `l8`): +€2.0k on tuning weeks but −€3.7k on 20 fresh weeks (Exp. 38); fresh lateness clusters on 300–499 km trips and `next_day` options.
 - **Driver cost per car** (Sat 23:00): a car alone costs €71 (1.07× typical), in a 2-chain €49, in a 3-chain €35. Lone cars are 54% of fees; that is where the top teams' margin must come from. Longer links (80/120 km), private cars in chains, cheaper trade-ins, a 2 h chain margin, slower raises for cars with time, cheaper 3-car chains: noise (l8 and l8x move ±€3–5k in opposite directions); cheaper later options −€7.3k (Exp. 53–59). Only fixes that follow the rules held on every set (notes, charging, cancellations).
 - **When a gig is posted decides how it books** (Exp. 64, 4 traced weeks): gigs whose first car is ready ≥ 12 h later book 94–99% (1-car in 25 min, chains in 1–2 min, 51–93% at the opening fee); chains for cars already ready book 43–55%. Opening those early gigs at 0.7× instead of 0.8×: +1.5% over 30 weeks; at 0.6×: −€13.9k on 20 weeks.
+- **Sunday night (Exp. 63, 65, 66), on `l8_lane`/`l8_early`, none adopted:** price by the de-noised cost −€2.4k; cheaper quotes for cars ready ≥ 12 h later −€3.4k (l8 + l8x); posting big dealers' ready cars at once early in the week (trust starts on delivery; D01 is at trust 0–1 every Tuesday morning) −€2.7k. Ready-now chains: 35% book in 10 min, 23% in 30–120 min, so the 2 h split stays.
 - **Notes matter** (Exp. 49): the world acts on every note; the starter's reader missed all plates and manual cars and many ready times and deadlines. Reading them well: +3.8% over 30 weeks and the worst week 90.3% → 93.8%. The reveal holds each won order's true note facts, so a reader can be scored offline.
 - **Saturday night (Exp. 47–51), not adopted:** fees by where drivers live (`home_fee`), a brake that counts only urgent cars, no fee raises at night, cheaper price with the note reader, explicit chain windows: neutral or worse. Snow-touched orders are late 9.8% vs 3.3% (~1.8 extra late a week; forecasts come 24 h ahead).
 - **Saturday evening (Exp. 44–46), all on `l8_chain`, none adopted:** the competitor's level is learnable (week ±0.08×, day ±0.12–0.26×, Monday −0.21×; log loss 0.552 → 0.439) but following it is neutral; cheaper base price, long trips, chain-aware discounts, a narrower backlog brake and cheaper shared gigs all win more orders at a lower margin; 4-car chains, private addresses and charging cars in chains, and other split times are neutral or worse; offering the next car to a driver who just booked: 1 of 84 accepted. Differences under ~€3k on 10 weeks are noise.
@@ -83,7 +87,7 @@ Ranking round: one person runs `for i in 1 2 3 4 5; do caffeinate -i .venv/bin/p
 
 Still 42% of cars travel alone (140/week at €68 vs €42 shared): held > 24 h without partner 36, chain split 30, charging stop 26, posted alone with < 24 h left 24, private address 18.5.
 
-1. **Close the gap to the top 10** (round 21:00: −€2.8k/week vs 10th, behind in all 5 weeks, ~+20% needed). Adopt a change before the final only if it wins > €3k on l8 + l8x with every week ≥ 91%.
+1. **Close the gap to the top 10** (round Sunday 00:00: −€1.3k/week vs 10th, behind in 4 of 5 weeks, ~+9% needed: ~40 more orders/week at our margin). Adopt a change before the final only if it wins > €3k on l8 + l8x with every week ≥ 91%.
 2. **Late orders left** (11.3/week): booked in time but late 3.3, driver drops 2.9, order changes 2.6, booked only after the deadline warning 1.9. Snow: post and price snow-touched orders earlier/higher.
 3. **Final Sun 09:00** with `l8_early` (fallback `l8_lane`). Check it live in the 01:00 test final.
 

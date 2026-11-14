@@ -505,6 +505,18 @@ class Desk:
             order_id not in self.urgent
             and self.last_pickup(order) - self.now >= self.p.hold_h * HOUR
             and self.single_stops(order_id) is not None
+            and not self.rush(order)
+        )
+
+    def rush(self, order: Order) -> bool:
+        """Params.rush_n: early in the week a big dealer's car that is ready now goes out at once instead of waiting
+        for a chain partner: trust counts only on delivery, and these dealers start the week at zero (Exp. 66)."""
+        p = self.p
+        return (
+            bool(p.rush_n)
+            and self.now < p.rush_until_h * HOUR
+            and self.dealer_requests.get(order["dealerId"], 0) >= p.rush_n
+            and order["legs"][0]["pickup"]["window"]["from"] <= self.now + HOUR
         )
 
     def plan(self) -> None:

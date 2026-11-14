@@ -175,9 +175,10 @@ Compare with `l8_early`: €134,315 on the tuning weeks, €144,272 on `l8x`, �
 | `l8_charge`, 30 test weeks | €13,975 (+2.1%), worst week 92.9% on time | ~350 |
 | `l8_lane`, 30 test weeks | €14,289 (+2.2%), worst week 93.7% on time | ~355 |
 | **`l8_early`**, 30 test weeks | **€14,508** (+1.5%), worst week 92.9% on time | ~360 |
-| **`l8_notes`**, ranking round "Saturday 21:00" | **€13,912**, worst week 95.0% (€69,561 for 5 weeks, **rank 26 of 40**; 10th €83,479, 1st €105,424) | 361 |
+| `l8_notes`, ranking round "Saturday 21:00" | €13,912, worst week 95.0% (€69,561 for 5 weeks, rank 26 of 40; 10th €83,479, 1st €105,424) | 361 |
+| **`l8_early`**, ranking round "Sunday 00:00" | **€14,525**, worst week 96.7% (€72,623 for 5 weeks, **rank 17 of 24** at 00:10; 10th €79,287, 1st €102,582) | 359 |
 
-**The gap is volume at the same margin:** the top 10 won 390–500 orders at €41–49 each in the 20:00 test final; we won 334 at €38.8. Every way we tried to win more (cheaper prices, long trips, a narrower backlog brake) raised our cost per car, because drivers are scarce at level 8 (Exp. 45). The biggest lever is still driver cost: a shared car costs 0.77× its typical fee, a car alone 1.06×, and 42% of our cars still go alone. Details and next steps: [PROGRESS.md](PROGRESS.md).
+**The gap is volume at the same margin:** in round "Sunday 00:00" ranks 2–10 won 386–443 orders a week at €36.6–42.2 each; we won 359 at €40.4 (−€1.3k/week to 10th). Every way we tried to win more (cheaper prices, long trips, a narrower backlog brake) raised our cost per car, because drivers are scarce at level 8 (Exp. 45). The biggest lever is still driver cost: a shared car costs 0.77× its typical fee, a car alone 1.06×, and 42% of our cars still go alone. Details and next steps: [PROGRESS.md](PROGRESS.md).
 
 ## Team and rules
 

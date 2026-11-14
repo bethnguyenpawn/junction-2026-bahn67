@@ -127,6 +127,8 @@ def flat_mult(request: PriceRequest, level: int, params: Params, s: Situation) -
         mult -= p.fit_cut
     if p.big_n and s.dealer_requests >= p.big_n:
         mult -= p.big_cut
+    if p.early_quote_cut and ready_after(request, s) >= p.early_h * HOUR:
+        mult -= p.early_quote_cut
     if p.cost_k:  # our cost follows the typical fee; the competitor's price follows the list price
         mult += p.cost_k * (typical_fee(request, p) / request["options"][0]["listPriceCents"] - p.cost_mid)
     if s.monday:
@@ -147,6 +149,14 @@ def flat_mult(request: PriceRequest, level: int, params: Params, s: Situation) -
     if level >= 8 and p.trust_w:
         mult *= 1 + p.trust_w * 0.01 * min(s.trust, TRUST_CAP)
     return mult
+
+
+def ready_after(request: PriceRequest, s: Situation) -> int:
+    """Minutes from the request to the first car's ready time (the stated window, or the note's later time)."""
+    ready = request["legs"][0]["pickup"]["window"]["from"]
+    if s.facts is not None and s.facts.ready is not None:
+        ready = max(ready, s.facts.ready)
+    return ready - request["arrivedAt"]
 
 
 def best_price(request: PriceRequest, option: DeliveryOption, params: Params, s: Situation) -> int | None:

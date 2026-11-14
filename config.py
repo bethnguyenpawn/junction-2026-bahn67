@@ -140,6 +140,9 @@ class Params:
     chain_charging: int = 0  # Exp. 45: electric cars with a charging stop may join chains (+40 min in the timing)
     chain_fee_step: float = 0.0  # Exp. 45: - this from pair_fee for each car beyond the second
     tradein_mult: float = 0.0  # Exp. 53: > 0 quotes a trade-in (two legs) at this x list, no private surcharge
+    early_quote_cut: float = 0.0  # Exp. 65: x list off when the car is ready >= early_h after the request
+    rush_n: int = 0  # Exp. 66: a dealer with >= rush_n requests this week has its ready cars posted at once, no hold
+    rush_until_h: float = 48.0  # ... until this many hours after Monday 00:00
     pair_km: float = 30.0  # first car's delivery within this many road km of the second's pickup
     pair_lead_min: int = 60  # the driver starts no earlier than this many minutes from now
     pair_margin_h: float = 2.0  # both cars due at least this long after the planned delivery
