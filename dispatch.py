@@ -134,6 +134,7 @@ class Desk:
         self.near = near or {}  # place id -> drivers living within 30 km (empty = not loaded)
         self.adapt = 0.0  # price adjustment steered by our recent win rate (Params.adapt_*)
         self.priced: set[str] = set()  # requests we quoted to win (not declined)
+        self.dealer_requests: dict[str, int] = {}  # dealer id -> price requests seen this week
         self.last_seen: dict[str, int] = {}  # driver id -> minute they last viewed one of our gigs
         self.offers_sent: dict[tuple[str, int], int] = {}  # (driver id, day) -> direct offers sent
         self.outbox: list[Action] = []
@@ -266,11 +267,21 @@ class Desk:
 
     def quote(self, request: PriceRequest) -> None:
         self.requests[request["id"]] = request
+        dealer = request["dealerId"]
+        self.dealer_requests[dealer] = self.dealer_requests.get(dealer, 0) + 1
         leg = request["legs"][0]
         road = self.roads.get((leg["pickup"]["placeId"], leg["delivery"]["placeId"]))
-        near = len(self.near[leg["pickup"]["placeId"]]) if self.near else None
-        prices = pricing.quote(request, self.level, self.p, road["km"] if road else 0.0, self.backlog(),
-                               road["minutes"] if road else 0, self.trust.get(request["dealerId"], 0), near, self.adapt)
+        prices = pricing.quote(request, self.level, self.p, pricing.Situation(
+            km=road["km"] if road else 0.0,
+            drive_min=road["minutes"] if road else 0,
+            backlog=self.backlog(),
+            trust=self.trust.get(dealer, 0),
+            near=len(self.near[leg["pickup"]["placeId"]]) if self.near else None,
+            near_delivery=len(self.near[leg["delivery"]["placeId"]]) if self.near else None,
+            adapt=self.adapt,
+            dealer_requests=self.dealer_requests[dealer],
+            monday=request["arrivedAt"] // DAY == 0,
+        ))
         if prices and not pricing.is_decline(request, prices):
             self.priced.add(request["id"])
         if prices:
@@ -436,6 +447,8 @@ class Desk:
             factor *= p.dense_fee
         if p.slack_fee != 1.0 and order["lastPickupAt"] - self.now >= p.slack_fee_h * HOUR:
             factor *= p.slack_fee
+        if p.trust_fee != 1.0 and self.trust.get(self.requests[order["id"]]["dealerId"], 0) >= p.trust_fee_n:
+            factor *= p.trust_fee
         return factor
 
     def ladder_mult(self, order_id: str) -> float:

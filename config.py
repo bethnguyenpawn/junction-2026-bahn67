@@ -20,6 +20,41 @@ class Params:
     decline_km: float = 0.0         # decline (quote 10x list) when the first leg is longer
     min_slack_h: float = 0.0        # quote only options with deadline - drive - now >= this many hours (0 = first option only)
 
+    # --- Expected-profit pricing (levels 4+; 0 = off): quote the price that maximises
+    # P(win | price, situation) x (price - expected cost). P is a logistic model fitted by analysis/winmodel.py.
+    opt: int = 0
+    win_const: float = 8.014
+    win_mult: float = -6.142        # per 1.0x of list price
+    win_trust: float = 1.885        # at full dealer trust (25)
+    win_monday: float = -1.397
+    win_dense: float = 0.158
+    win_km100: float = 0.129
+    win_big: float = -0.121
+    late_const: float = -1.349      # P(late) = logistic of these terms (analysis/latemodel.py)
+    late_slack24: float = -0.727    # per day of slack
+    late_km100: float = 0.066
+    late_private: float = 1.415
+    late_near_pu: float = -0.805    # x log(1 + drivers near the pickup) / 4
+    late_near_de: float = -0.264    # x log(1 + drivers near the delivery) / 4
+    late_backlog10: float = 0.291   # per 10 won orders without a driver
+    late_hour: float = 0.042        # request after 15:00
+    opt_fee: float = 0.95           # expected driver fee, x the typical fee
+    opt_backlog: float = 0.03       # + this x typical fee per won order still without a driver (shadow price of capacity)
+    opt_late_refund: float = 0.5    # share of the price lost when late (refund, ranking risk)
+    opt_late_trust: float = 0.0     # value of a full-trust dealer's trust lost when late, x list price
+    opt_lo: float = 1.0             # price range searched, x list
+    opt_hi: float = 2.0
+
+    # --- Protect dealer trust (level 8): a late order halves the dealer's count, so book drivers sooner for
+    # dealers whose count is high.
+    big_n: int = 0                  # a dealer that has sent >= big_n requests so far this week (0 = off) ...
+    big_cut: float = 0.0            # ... gets quote_mult - big_cut: win more of the big dealers, so their trust grows
+    trust_safe_n: int = 0           # for a dealer with count >= this (0 = off) ...
+    trust_slack_h: float = 0.0      # ... quote only options with at least this much slack
+    trust_km: float = 0.0           # ... and decline trips longer than this (0 = keep decline_km)
+    trust_fee: float = 1.0          # fee factor for orders of a dealer with count >= trust_fee_n; 1.0 = off (Exp. 27: worse)
+    trust_fee_n: int = 5
+
     # --- Normal driver fee schedule, as multiples of the request's typical fee (referenceFeeCents).
     open_mult: float = 1.0          # opening fee
     raise_per_step: float = 0.10    # added per step (levels 2+; level 1 allows one step)

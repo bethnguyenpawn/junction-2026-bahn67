@@ -8,25 +8,28 @@ it quotes prices to car dealers, wins orders, and hires freelance drivers to mov
 
 More: [PROGRESS.md](PROGRESS.md) (status, next steps, deadlines) · [LESSONS.md](LESSONS.md) (every experiment, including what failed) · [docs/CHALLENGE_SUMMARY.md](docs/CHALLENGE_SUMMARY.md) (the challenge in plain words).
 
-## 📊 Status (Sat 14 Nov, 10:00)
+## 📊 Status (Sat 14 Nov, 11:30)
 
 | Level 8 | Margin per week | Notes |
 |---|---|---|
 | Official starter | −€60,442 | never ranked (46% late) |
 | **`--preset l8`** (current) | **+€10,265** | 30 test weeks, all ranked, worst week 92.6% on time. Use this for ranking runs and the final. |
-| Our practice round "Saturday 00:00" (old preset) | €9,299 | **rank 43 of 62** |
-| 10th place / House best / 1st in that round | €15,095 / €14,358 / €17,185 | **top 10 needs ≈ +€5,000/week** |
+| Practice round "Saturday 09:00" (`l8`) | €9,400 (€47,002 / 5 weeks) | **rank 28 of 36** finished, 97.3% on time |
+| 10th place / House best / 1st in that round | €13,744 / €10,132 / €15,515 | **top 10 needs ≈ +€4,500/week** |
 
 What we have measured:
 - **Price:** win rate at 1.2× list 61%, 1.4× 40%, 1.6× 19%. Profit per request is flat from 1.1× to 1.4×, so price tuning alone won't close the gap. Cheaper prices and longer trips leave a fresh week under 90%.
 - **Drivers:** we use 100–150 of the 650–950 drivers a week; fees are ~60% of revenue. Our fee schedule is already at its optimum as one level for all cars.
+- **Volume:** on the same weeks the top teams win 1.4–2× more orders at the same margin per order and on-time share.
+- **Dealer trust:** at the same price we win 36% of a dealer's requests at trust 0–4 and 82% at trust 25. One dealer sends 1/3 of all requests, and each late order halves its trust.
+- **Expected-profit pricing** (fitted win and lateness models, `--set opt=1`): +€6–8k per 10 weeks, but not yet safe (a week under 90%). Most promising lead.
 - **Mondays:** we win almost nothing (the competitor starts each week cheap).
 - **No gain** (code kept, off): dealer-trust pricing, flat fees, fee level per car, direct offers, two-car gigs, win-rate steering, price by our cost.
 - **Restart works:** rebuilding mid-week from the server gives the same result; the final loop skips a failing event instead of stopping.
 
 Next:
 1. **Test final Sat 14:00 / 20:00:** start `python main.py --final --preset l8` before it begins (the live loop has never run on a moving clock).
-2. Cheaper drivers: offers to drivers who just finished our gigs nearby; holding new orders a few minutes to pair them.
+2. Make expected-profit pricing safe (stronger capacity term), then check on `l8x` / `l8y`.
 3. Price-war day (competitor −20% for one day) and the outage region (competitor down for a day).
 
 ## ⚙️ How it works
@@ -82,6 +85,7 @@ python evaluate.py --level 8 --preset l8 --seed-prefix l8x       # same on 10 ot
 python evaluate.py --level 8 --preset l8 --set quote_mult=1.5 --note "what I'm trying"
 python analysis/orders.py --note "what I'm trying"               # which orders were late / lost money
 python analysis/market.py --note "what I'm trying"               # win rate by price, drivers near pickup
+python analysis/winmodel.py --note "explore l8 1.1-1.9"          # fit the win-chance model (needs numpy)
 python main.py --final --preset l8                               # play the final (live)
 python -m unittest discover -s tests                             # offline tests (no key needed)
 ```

@@ -2,7 +2,7 @@
 
 Status, what we learned, and what's next. Every experiment with its numbers: [LESSONS.md](LESSONS.md) · Challenge in plain words: [docs/CHALLENGE_SUMMARY.md](docs/CHALLENGE_SUMMARY.md)
 
-## Status (Sat 14 Nov, 10:00)
+## Status (Sat 14 Nov, 11:30)
 
 **Use `--preset l8`** for ranking runs and the final.
 
@@ -13,7 +13,8 @@ Status, what we learned, and what's next. Every experiment with its numbers: [LE
 | `l8_v2` | €297,267 | €9,909 | 91.0% |
 | **`l8` (current)** | **€307,943** | **€10,265** | **92.6%**, 30/30 ranked |
 
-**Gap to the top 10:** 10th place in that round had €75,475 (≈ €15,100/week); House best €71,790. We need ≈ +€5,000/week.
+**Practice round "Saturday 09:00" with `l8`:** €47,002 (97.3% on time), rank 28 of 36 finished; House best €50,660, 10th €68,719, 1st €77,573.
+**Gap:** the top teams win 1.4–2× more orders at the same margin per order and the same on-time share. We need ≈ +€4,000–5,000/week.
 
 Ranking round: run 5× `.venv/bin/python main.py --board --level 8 --preset l8` (only when the team agrees).
 
@@ -31,7 +32,9 @@ Ranking round: run 5× `.venv/bin/python main.py --board --level 8 --preset l8` 
 - **Drivers:** we use 100–150 of the 650–950 drivers a week; fees are ~60% of revenue. Our fee schedule is at its optimum as one level for all cars.
 - **Mondays:** we win only 1–10% of quotes in most weeks; the competitor starts each week cheap and raises its prices for dealers we rarely win.
 - **Safety:** cheaper base prices and longer trips always look good on some weeks but leave a fresh week under 90%. Always check `l8x` and `l8y`.
-- **Tried, no gain** (code kept, off): dealer-trust pricing, prices per delivery option, flat fees, other fee caps, fee level per car, direct offers to drivers near the delivery town, two-car gigs, win-rate steering, price by our cost.
+- **Dealer trust drives volume:** at the same price we win 36% of a dealer's requests at trust 0–4 and 82% at trust 25. One dealer sends 1/3 of all requests; each late order halves its trust.
+- **Expected-profit pricing** (`opt`, fitted win and lateness models): +€6–8k per 10 weeks but riskier weeks (88–92% worst). Promising; needs a stronger capacity term.
+- **Tried, no gain** (code kept, off): dealer-trust pricing, prices per delivery option, flat fees, other fee caps, fee level per car, direct offers to drivers near the delivery town, two-car gigs, win-rate steering, price by our cost, higher fees or stricter filters for trusted dealers, lower prices for big dealers.
 
 ## Code
 
@@ -39,17 +42,17 @@ Ranking round: run 5× `.venv/bin/python main.py --board --level 8 --preset l8` 
 |---|---|
 | `main.py` | Runs a world: practice loop (`advance`), final loop (live stream, skips a failing event, rebuilds after errors). |
 | `dispatch.py` | `Desk`: answers each event with actions (post, reprice, withdraw, retry); fee schedules. |
-| `pricing.py` | `quote()`: the pricing rules. Levels 1–3: list price (no quote = declined). |
+| `pricing.py` | `quote(request, level, params, Situation)`: flat rules, or expected-profit pricing (`opt`). Levels 1–3: list price. |
 | `config.py` | `Params` (every tunable number; used ones first, tested-and-off ones last) and `PRESETS`. Defaults = kit starter. |
 | `evaluate.py` | Benchmark over 10 fixed weeks (≤ 6 worlds at once) → `results/log.jsonl`. |
-| `analysis/` | `orders.py` (late%/margin by distance, day, town), `market.py` (win rate by price, drivers near pickup), `fees.py`. |
+| `analysis/` | `orders.py` (late%/margin by distance, day, town), `market.py` (win rate by price, drivers near pickup), `winmodel.py` / `latemodel.py` (fit the pricing models, needs numpy), `fees.py`. |
 | `tests/` | Offline unit tests: `python -m unittest discover -s tests`. |
 
 ## Next (in priority order)
 
 1. **Test final today 14:00 (and 20:00):** start `.venv/bin/python main.py --final --preset l8` before 14:00. Check it keeps up with the clock and that the score looks like a practice week.
-2. **Cheaper drivers:** offers to drivers who just finished our gigs nearby; holding new orders a few minutes to pair them.
-3. **Dealer trust as extra wins** (raising prices for trusted dealers failed): e.g. a weaker backlog brake for them.
+2. **Make expected-profit pricing safe** (`opt=1`): a stronger capacity term, then check on `l8x`/`l8y`. Most promising lead.
+3. **Cheaper drivers:** offers to drivers who just finished our gigs nearby.
 4. **Price-war day** (competitor −20% for one unannounced day) and the outage region (competitor down, +30% prices).
 
 ## Deadlines

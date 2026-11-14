@@ -386,6 +386,56 @@ Scale the whole normal fee schedule for easy cars (many drivers near the pickup,
 
 - **Lesson:** a flat markup on the list price is best; the competitor's lane prices already follow how hard a lane is for drivers.
 
+## Practice round "Saturday 09:00" (`--preset l8`, played by the user)
+
+| Week | Us | House best | 1st (DaVinci's Night Shift) |
+|---|---|---|---|
+| 1 | €5,495 / 168 orders | €7,622 / 258 | €10,735 / 331 |
+| 2 | €10,577 / 260 | €7,802 / 241 | €15,187 / 376 |
+| 3 | €9,212 / 258 | €11,773 / 368 | €15,462 / 400 |
+| 4 | €13,113 / 335 | €13,666 / 317 | €20,883 / 483 |
+| 5 | €8,605 / 254 | €9,796 / 274 | €15,305 / 397 |
+| **Total** | **€47,002**, 97.3% on time, rank 28 of 36 finished | €50,660 | €77,573, 97.2% |
+
+- **Lesson:** the top teams win 1.4–2× more orders at the same margin per order and the same on-time share. We are too cautious (97% on time where 90% is needed).
+
+## Experiment 27: dealer trust is the volume lever (analysis)
+
+- One dealer (D01) sends ~1/3 of all requests (330–380/week), D02 ~120–160. Trust counts per dealer, and **a late order halves it**: D01 ends the week at only 15–25 because ~3–4 of its orders a week are late.
+- **At the same price (1.35–1.55× list, Tue–Fri), our win rate rises with the dealer's trust:** 0–4: 36% · 5–9: 40% · 10–14: 46% · 15–19: 67% · 20–24: 77% · 25: 82%.
+- Late orders (89 of 2,592 over 10 weeks): mostly no driver ever booked (`deadline_close` + `gig_expired`), then failed visits (notes) and drops; D01 has 36 of them.
+
+| Try to use it (on l8) | l8 | Worst | Verdict |
+|---|---|---|---|
+| fee × 1.15 for dealers with trust ≥ 5 (`trust_fee`) | €89,922 | 95.5% | ✗ not more on time |
+| fee × 1.3 for them | €79,577 | 93.2% | ✗ |
+| slack ≥ 12 h for dealers with trust ≥ 10 (`trust_safe_n`, `trust_slack_h`) | €94,404 | 95.4% | ✗ |
+| decline > 400 km for them (`trust_km`) | €90,303 | 94.0% | ✗ |
+| −0.1 for dealers with ≥ 20 requests (`big_n`, `big_cut`) | €92,409 | 93.3% | ✗ the competitor also cuts for them |
+| −0.2 for them | €87,430 | 94.0% | ✗ |
+| quote 1.3 + opening fee 0.9 | €85,117 | 94.5% | ✗ volume without margin |
+| quote 1.3 + opening fee 1.0, +0.05 steps | €77,777 | 93.5% | ✗ |
+
+Also checked: gigs for a later day do not overpay (46% book at the opening fee); same-day gigs hit the cap 30% of the time.
+
+## Experiment 28: expected-profit pricing with fitted models (`opt`) ~ promising, not safe yet
+
+- **Win model** (`analysis/winmodel.py`, logistic regression on 19,450 random-price quotes): P(win) from price/list (−6.1 per 1.0×), dealer trust (+1.9 at 25 ≈ the rules' +25%), Monday (−1.4), drivers near the pickup, distance, dealer size. Held-out log loss 0.48 vs 0.70 for a constant; calibrated (pred 0.29 → real 0.29, 0.90 → 0.86).
+- **Lateness model** (`analysis/latemodel.py`, 16,118 won orders): P(late) from slack (−0.73 per day), private address (+1.4), drivers near pickup/delivery, backlog (+0.29 per 10), distance. The riskiest 5% by the model are 22% late (average 5.9%).
+- **Price** = per option, the price that maximises P(win) × (price × (1 − P(late) × 0.5) − fee − backlog cost − P(late) × lost trust).
+
+| On l8 (flat rules off for price; slack ≥ 8 h and decline > 550 km kept) | l8 | l8x | Worst |
+|---|---|---|---|
+| current `l8` (flat 1.45×) | €95,102 | €99,994 | 92.6% |
+| win model only, backlog cost 0.03 | **€103,493** | | **89.8%** ✗ |
+| win model only, backlog cost 0.04 | €101,936 | €102,473 | 90.8% (too close) |
+| win model only, fee 1.05 | €102,870 | €100,546 | **88.9%** ✗ |
+| win model only, backlog cost 0.05 | €99,504 | €96,151 | **88.5%** ✗ |
+| win + lateness model | €100,969 | | 91.9% |
+| win + lateness model + trust loss 1.0 | €99,027 | | **88.7%** ✗ |
+
+- **Lesson:** the models add margin (+€6–8k per 10 weeks) by pricing each request to its situation, but take more risk in overloaded weeks. Next: a stronger capacity term (e.g. backlog brake on top), check on l8x. Code kept, off (`opt=0`).
+
 ## Restart test (the final's recovery path) ✓
 
 Played `l8-a` to Wednesday 12:00, threw the desk away, rebuilt it with `Desk.rejoin` from the snapshot and events, played on: **€11,739.88 vs €11,737.33 uninterrupted**, same orders and on-time share. `play_final` now also skips an event whose handling fails and rebuilds after any other error, instead of stopping.

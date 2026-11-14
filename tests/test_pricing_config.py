@@ -16,6 +16,10 @@ from dispatch import fee_schedule, steep_schedule  # noqa: E402
 NOON = 12 * 60  # Monday 12:00
 
 
+def quote(req, level, params, **situation):
+    return pricing.quote(req, level, params, pricing.Situation(**situation))
+
+
 def request(options, respond_by=NOON):
     return {"id": "R1", "respondBy": respond_by, "legs": [{}], "referenceFeeCents": 5000,
             "options": [{"kind": k, "deadline": d, "listPriceCents": p} for k, d, p in options]}
@@ -29,55 +33,55 @@ class Pricing(unittest.TestCase):
     def test_levels_1_to_3_quote_list_price_of_first_option(self):
         p = PRESETS["l8"]  # even with tuned params, levels 1-3 must stay at list price
         for level in (1, 2, 3):
-            self.assertEqual(pricing.quote(request([SAME, NEXT]), level, p, km=900, backlog=50), {"same_day": 10000})
+            self.assertEqual(quote(request([SAME, NEXT]), level, p, km=900, backlog=50), {"same_day": 10000})
 
     def test_default_is_starter_at_level_8(self):
-        self.assertEqual(pricing.quote(request([SAME, NEXT]), 8, DEFAULT), {"same_day": 10000})
+        self.assertEqual(quote(request([SAME, NEXT]), 8, DEFAULT), {"same_day": 10000})
 
     def test_quote_mult_and_backlog(self):
         p = Params(quote_mult=1.6, backlog_k=0.01)
-        self.assertEqual(pricing.quote(request([SAME]), 8, p), {"same_day": 16000})
-        self.assertEqual(pricing.quote(request([SAME]), 8, p, backlog=10), {"same_day": 17000})
+        self.assertEqual(quote(request([SAME]), 8, p), {"same_day": 16000})
+        self.assertEqual(quote(request([SAME]), 8, p, backlog=10), {"same_day": 17000})
 
     def test_long_trip_is_declined_far_above_list(self):
         p = Params(quote_mult=1.6, decline_km=500)
-        self.assertEqual(pricing.quote(request([SAME]), 8, p, km=501), {"same_day": 100000})
-        self.assertEqual(pricing.quote(request([SAME]), 8, p, km=500), {"same_day": 16000})
+        self.assertEqual(quote(request([SAME]), 8, p, km=501), {"same_day": 100000})
+        self.assertEqual(quote(request([SAME]), 8, p, km=500), {"same_day": 16000})
 
     def test_slack_filter_drops_options_without_time(self):
         p = Params(quote_mult=1.5, min_slack_h=8)
         # same_day: 20:00 - 12:00 - 2h drive = 6h < 8h -> dropped; next_day kept
-        self.assertEqual(pricing.quote(request([SAME, NEXT]), 8, p, drive_min=120), {"next_day": 18000})
+        self.assertEqual(quote(request([SAME, NEXT]), 8, p, drive_min=120), {"next_day": 18000})
         # nothing left -> decline at 10x list
-        self.assertEqual(pricing.quote(request([SAME]), 8, p, drive_min=120), {"same_day": 100000})
+        self.assertEqual(quote(request([SAME]), 8, p, drive_min=120), {"same_day": 100000})
 
     def test_later_mult_only_changes_later_options(self):
         p = Params(quote_mult=1.5, min_slack_h=1, later_mult=1.1)
-        self.assertEqual(pricing.quote(request([SAME, NEXT]), 8, p), {"same_day": 15000, "next_day": 19800})
+        self.assertEqual(quote(request([SAME, NEXT]), 8, p), {"same_day": 15000, "next_day": 19800})
 
     def test_dealer_trust_only_at_level_8_and_capped(self):
         p = Params(quote_mult=1.0, trust_w=1.0)
-        self.assertEqual(pricing.quote(request([SAME]), 7, p, trust=10), {"same_day": 10000})
-        self.assertEqual(pricing.quote(request([SAME]), 8, p, trust=10), {"same_day": 11000})
-        self.assertEqual(pricing.quote(request([SAME]), 8, p, trust=99), {"same_day": 12500})
+        self.assertEqual(quote(request([SAME]), 7, p, trust=10), {"same_day": 10000})
+        self.assertEqual(quote(request([SAME]), 8, p, trust=10), {"same_day": 11000})
+        self.assertEqual(quote(request([SAME]), 8, p, trust=99), {"same_day": 12500})
 
     def test_drivers_near_pickup_move_the_price(self):
         p = Params(quote_mult=1.5, dense_n=40, dense_cut=0.2, sparse_n=5, sparse_add=0.1)
-        self.assertEqual(pricing.quote(request([SAME]), 8, p, near=40), {"same_day": 13000})
-        self.assertEqual(pricing.quote(request([SAME]), 8, p, near=10), {"same_day": 15000})
-        self.assertEqual(pricing.quote(request([SAME]), 8, p, near=4), {"same_day": 16000})
-        self.assertEqual(pricing.quote(request([SAME]), 8, p), {"same_day": 15000})  # unknown: no change
+        self.assertEqual(quote(request([SAME]), 8, p, near=40), {"same_day": 13000})
+        self.assertEqual(quote(request([SAME]), 8, p, near=10), {"same_day": 15000})
+        self.assertEqual(quote(request([SAME]), 8, p, near=4), {"same_day": 16000})
+        self.assertEqual(quote(request([SAME]), 8, p), {"same_day": 15000})  # unknown: no change
 
     def test_private_address_surcharge_and_decline(self):
         r = request([SAME])
         r["legs"] = [{"pickup": {"privateAddress": True}, "delivery": {"privateAddress": False}}]
-        self.assertEqual(pricing.quote(r, 8, Params(quote_mult=1.5, private_add=0.2)), {"same_day": 17000})
-        self.assertEqual(pricing.quote(r, 8, Params(quote_mult=1.5, private_add=9)), {"same_day": 100000})
+        self.assertEqual(quote(r, 8, Params(quote_mult=1.5, private_add=0.2)), {"same_day": 17000})
+        self.assertEqual(quote(r, 8, Params(quote_mult=1.5, private_add=9)), {"same_day": 100000})
 
     def test_win_rate_adjustment_moves_the_price(self):
         p = Params(quote_mult=1.5)
-        self.assertEqual(pricing.quote(request([SAME]), 8, p, adapt=-0.1), {"same_day": 14000})
-        self.assertEqual(pricing.quote(request([SAME]), 3, p, adapt=-0.1), {"same_day": 10000})  # levels 1-3: list
+        self.assertEqual(quote(request([SAME]), 8, p, adapt=-0.1), {"same_day": 14000})
+        self.assertEqual(quote(request([SAME]), 3, p, adapt=-0.1), {"same_day": 10000})  # levels 1-3: list
 
     def test_is_decline(self):
         r = request([SAME, NEXT])
@@ -85,7 +89,7 @@ class Pricing(unittest.TestCase):
         self.assertFalse(pricing.is_decline(r, {"same_day": 14500, "next_day": 13050}))
 
     def test_prices_are_whole_cents(self):
-        q = pricing.quote(request([("same_day", 20 * 60, 3333)]), 8, Params(quote_mult=1.37))
+        q = quote(request([("same_day", 20 * 60, 3333)]), 8, Params(quote_mult=1.37))
         self.assertIsInstance(q["same_day"], int)
 
 
