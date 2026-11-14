@@ -101,6 +101,9 @@ class Params:
     # --- Notes (Exp. 49): 1 = notes.py reads ready time, deadline, closing time, plates and manual gearbox from the
     # dealer's note (right on all 5,790 noted cars of cached weeks); 0 = the starter's keyword matcher.
     note_reader: int = 0
+    charge_km: float = (
+        0.0  # > 0: a low-battery electric car gets a charging stop only on a route over this (RULES: 200)
+    )
 
     # --- Steep schedule after deadline_close.
     steep_open_mult: float = 1.5
@@ -132,6 +135,7 @@ class Params:
     next_offer_mult: float = 0.0  # Exp. 46: on a booking, offer that driver our unbooked car near where they finish
     chain_charging: int = 0  # Exp. 45: electric cars with a charging stop may join chains (+40 min in the timing)
     chain_fee_step: float = 0.0  # Exp. 45: - this from pair_fee for each car beyond the second
+    tradein_mult: float = 0.0  # Exp. 53: > 0 quotes a trade-in (two legs) at this x list, no private surcharge
     pair_km: float = 30.0  # first car's delivery within this many road km of the second's pickup
     pair_lead_min: int = 60  # the driver starts no earlier than this many minutes from now
     pair_margin_h: float = 2.0  # both cars due at least this long after the planned delivery
@@ -234,6 +238,10 @@ PRESETS["l8_chain"] = replace(PRESETS["l8_plan2"], chain_max=3, plan_every_h=1)
 # Exp. 49: + the note reader (notes.py): ready time, deadline, site hours, plates, manual gearbox from the dealer's
 # note. Failed visits 8.7 -> 0.3/week, late orders 14.3 -> 11.3/week; +€7.8k on l8 + l8x.
 PRESETS["l8_notes"] = replace(PRESETS["l8_chain"], note_reader=1)
+
+# Exp. 55: a charging stop only where RULES need one (route over 200 km), not for every electric car under 30%: the
+# short-route cars pay no stop and can join chains. +€6.4k over 30 weeks (+1.6%), worst 92.9%.
+PRESETS["l8_charge"] = replace(PRESETS["l8_notes"], charge_km=200)
 
 PRESETS["l8_guarded"] = replace(
     PRESETS["l8"], opt=1, opt_backlog=0.04, opt_guard_late=0.08, opt_guard_backlog=3, opt_delta_cap=0.06

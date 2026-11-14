@@ -43,17 +43,17 @@ The week should end with about `margin € 13,272   305 orders   95.4% on time  
 ## Commands
 
 ```bash
-python main.py --level 8 --seed l8-a --preset l8_notes                    # one practice week
-python evaluate.py --level 8 --preset l8_notes                            # benchmark: 10 fixed weeks, ~4 min
-python evaluate.py --level 8 --preset l8_notes --seed-prefix l8x         # the same on 10 other weeks
-python evaluate.py --level 8 --preset l8_notes --set pair_fee=0.8 --note "idea"   # try one change
+python main.py --level 8 --seed l8-a --preset l8_charge                    # one practice week
+python evaluate.py --level 8 --preset l8_charge                            # benchmark: 10 fixed weeks, ~4 min
+python evaluate.py --level 8 --preset l8_charge --seed-prefix l8x         # the same on 10 other weeks
+python evaluate.py --level 8 --preset l8_charge --set pair_fee=0.8 --note "idea"   # try one change
 python analysis/orders.py --note "idea"                                  # which orders were late / lost money
-python main.py --board --level 8 --preset l8_notes                       # ranking run: only one at a time per team
-python main.py --final --preset l8_notes                                  # the final (live clock)
-python main.py --world WORLD_ID --preset l8_notes                         # continue a world that stopped (e.g. server restart)
+python main.py --board --level 8 --preset l8_charge                       # ranking run: only one at a time per team
+python main.py --final --preset l8_charge                                  # the final (live clock)
+python main.py --world WORLD_ID --preset l8_charge                         # continue a world that stopped (e.g. server restart)
 ```
 
-- **Presets** (`config.py`): **`l8_notes` is the current best**, used for ranking runs and the final: `l8_chain` plus the note reader `notes.py` (Exp. 49). `l8_chain` = `l8_plan2` (batch planning, price 1.40×, links up to 50 km) with chains of up to 3 cars per driver, planned every hour (Exp. 42); it is the fallback. `l8` is without batch planning, `l8_plan_match` pairs with maximum matching (+3.2% over `l8_plan`, Exp. 43), `l8_guarded` is an experiment that was not adopted (Exp. 38), `starter` = the official starter, and the `l8_v*` presets are older versions. `--set name=value` changes any parameter.
+- **Presets** (`config.py`): **`l8_charge` is the current best**, used for ranking runs and the final: `l8_notes` with charging stops only on routes over 200 km (Exp. 55). `l8_notes` = `l8_chain` plus the note reader `notes.py` (Exp. 49), the fallback. `l8_chain` = `l8_plan2` (batch planning, price 1.40×, links up to 50 km) with chains of up to 3 cars per driver, planned every hour (Exp. 42). `l8` is without batch planning, `l8_plan_match` pairs with maximum matching (+3.2% over `l8_plan`, Exp. 43), `l8_guarded` is an experiment that was not adopted (Exp. 38), `starter` = the official starter, and the `l8_v*` presets are older versions. `--set name=value` changes any parameter.
 - **Test weeks:** tune on the `l8-a..j` weeks, confirm on `l8x`, and use `l8y` only as a final check. Each `evaluate.py` run is logged in `results/log.jsonl`; it waits up to five minutes when all team practice slots are taken.
 - **Ranking runs** (`--board`) only when the team agrees: 5 per round, and they can't be undone.
 
@@ -105,7 +105,7 @@ We use the official `spread` Python kit. It sends HTTPS + JSON to `https://sprea
 
 Winning means picking good numbers. All of them live in `Params` in `config.py`, and a preset is one set of them. Try a change without editing code: `--set name=value`.
 
-### Parameters used by `--preset l8_notes`
+### Parameters used by `--preset l8_charge`
 
 | Parameter | Value | What it does | Why this value |
 |---|---|---|---|
@@ -126,6 +126,7 @@ Winning means picking good numbers. All of them live in `Params` in `config.py`,
 | `wait_h` | 24 | An unpaired car waits for the next plan only with ≥ 24 h to spare, else it's posted alone | Cars held too long were late 19% |
 | `split_after_min` | 120 | A chain nobody books within 2 h is split into one-car gigs | Fixed three weeks under 90%; 30, 60 and 240 min are worse (Exp. 45) |
 | `note_reader` | 1 | Read each dealer note with `notes.py`: ready time, deadline, the sites' real hours, plates, manual gearbox → pickup and delivery windows, `withPlates`, manual-licence audience, holds and our own deadline warning | Right on all 5,790 noted cars of our cached weeks (scored against the reveal); failed visits 8.7 → 0.3 a week; +3.8% over 30 weeks, worst week 90.3% → 93.8% (Exp. 49) |
+| `charge_km` | 200 | Charging stop only for electric cars under 30% on routes over 200 km | RULES; the starter charged all of them, so short-route cars paid for a stop and could not join chains: +1.6% over 30 weeks (Exp. 55) |
 
 To decline, we quote 10× list: it never wins and costs nothing.
 
@@ -150,11 +151,11 @@ Also tested: reacting to the competitor's outage day (`outage_add`, Exp. 34) and
 ### How to test a change
 
 ```bash
-python evaluate.py --level 8 --preset l8_notes --set pair_fee=0.8 --note "pf0.8"                    # 10 tuning weeks
-python evaluate.py --level 8 --preset l8_notes --seed-prefix l8x --set pair_fee=0.8 --note "x: pf0.8"   # 10 holdout weeks
+python evaluate.py --level 8 --preset l8_charge --set pair_fee=0.8 --note "pf0.8"                    # 10 tuning weeks
+python evaluate.py --level 8 --preset l8_charge --seed-prefix l8x --set pair_fee=0.8 --note "x: pf0.8"   # 10 holdout weeks
 ```
 
-Compare with `l8_notes`: €125,036 on the tuning weeks, €135,759 on `l8x`, €149,830 on `l8y` (`l8_chain`: €119,744 / €132,510 / €142,551). Differences under ~€3k on 10 weeks are noise. Keep a change only if margin rises on both sets and every week stays ≥ 91% on time. Then log it in `LESSONS.md`.
+Compare with `l8_charge`: €128,446 on the tuning weeks, €137,900 on `l8x`, €150,673 on `l8y` (`l8_notes`: €125,036 / €135,759 / €149,830). Differences under ~€3k on 10 weeks are noise. Keep a change only if margin rises on both sets and every week stays ≥ 91% on time. Then log it in `LESSONS.md`.
 
 ## Status (Sat 14 Nov, 22:45)
 
@@ -168,7 +169,8 @@ Compare with `l8_notes`: €125,036 on the tuning weeks, €135,759 on `l8x`, �
 | Test final Sat 14:00 (live clock) | €1,365 in 3 working days, 94.1% on time: rank 32 of 55 (1st €4,023) | 68 (1st: 158) |
 | `l8_chain`, 30 test weeks | €13,160, worst week 90.3% on time | ~350 |
 | `l8_chain`, test final Sat 20:00 (live, full week) | €12,963, 97.6% on time: rank 41 of 75 (10th €16,623, 1st €19,592) | 334 (10th: 393) |
-| **`l8_notes`**, 30 test weeks | **€13,688** (+4.0%), worst week 93.8% on time | ~350 |
+| `l8_notes`, 30 test weeks | €13,688 (+4.0%), worst week 93.8% on time | ~350 |
+| **`l8_charge`**, 30 test weeks | **€13,901** (+1.6%), worst week 92.9% on time | ~350 |
 | **`l8_notes`**, ranking round "Saturday 21:00" | **€13,912**, worst week 95.0% (€69,561 for 5 weeks, **rank 26 of 40**; 10th €83,479, 1st €105,424) | 361 |
 
 **The gap is volume at the same margin:** the top 10 won 390–500 orders at €41–49 each in the 20:00 test final; we won 334 at €38.8. Every way we tried to win more (cheaper prices, long trips, a narrower backlog brake) raised our cost per car, because drivers are scarce at level 8 (Exp. 45). The biggest lever is still driver cost: a shared car costs 0.77× its typical fee, a car alone 1.06×, and 42% of our cars still go alone. Details and next steps: [PROGRESS.md](PROGRESS.md).

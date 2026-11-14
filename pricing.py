@@ -110,7 +110,8 @@ def price_flat(request: PriceRequest, option: DeliveryOption, level: int, params
 def flat_mult(request: PriceRequest, level: int, params: Params, s: Situation) -> float:
     """The flat rules: quote_mult + backlog brake + adjustments for the request's situation."""
     p = params
-    mult = p.quote_mult + p.backlog_k * s.backlog + s.adapt
+    trade_in = bool(p.tradein_mult) and len(request["legs"]) == 2  # list price of two cars, one driver's round trip
+    mult = (p.tradein_mult if trade_in else p.quote_mult) + p.backlog_k * s.backlog + s.adapt
     if p.market_k:  # follow the competitor's learned level, within limits
         mult += min(p.market_hi, max(p.market_lo, p.market_k * s.market))
     if p.explore_hi:  # research: a random price per request, to measure how the win chance falls with price
@@ -130,7 +131,7 @@ def flat_mult(request: PriceRequest, level: int, params: Params, s: Situation) -
         mult -= p.war_cut
     if p.dest_k:
         mult += p.dest_k * DEST_OFFSET.get(request["legs"][0]["delivery"]["placeId"], 0.0)
-    if p.private_add and private(request):
+    if p.private_add and private(request) and not trade_in:
         mult += p.private_add
     if s.near is not None:
         if p.dense_n and s.near >= p.dense_n:

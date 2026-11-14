@@ -780,3 +780,35 @@ The 14:00 test final showed a cheap week: at ≥ 1.45× list we won 1% of quotes
 - **Final loop:** an error in `desk.tick()` (planning, our own deadline warnings) was not caught like an error in an event, so it dropped that step's actions and rebuilt the desk. Now `main.guarded` logs and skips either; a lost connection still goes to the rebuild loop.
 - **Note reader:** 200,000 random notes (word salad from the vocabulary, random characters, empty / missing notes): no exception, 0.04 ms a note.
 - **Left as is:** `repost()` after `gig_expired` drops every window of the gig, also a pickup site's real hours (failed visits are 0.3 a week, so ≤ €11/week at stake).
+
+## Where the driver money goes (Sat 23:00, `l8_notes`, 10 l8 weeks)
+
+Per week: revenue €31,590, driver fees €18,464 (58%), late refunds + undelivered €565, other €58. Gap to the 10th team in round "Saturday 21:00": −€2.8k/week, behind in all 5 weeks.
+
+| Car went | Cars/week | Fee/car | x typical | Share of fees |
+|---|---|---|---|---|
+| alone | 141 | €70.8 | 1.07 | 54% |
+| … alone, booked after > 60 min | 57 | €80.1 | 1.20 | 25% |
+| … alone, booked after the deadline warning | 13 | €107.7 | 1.76 | 7% |
+| chain of 2 | 116 | €49.2 | 0.79 | 31% |
+| chain of 3 | 80 | €34.6 | 0.77 | 15% |
+
+Lone cars are the lever: each one moved into a chain saves ~€20–35. Also: 25% of gigs are booked within 1 minute of posting, median 23 min, p90 6.5 h. `driver_late` comes 0.3 times a week (not worth acting on).
+
+## Experiment 53: trade-ins at their own price (`tradein_mult`) ✗
+
+- **Why:** a trade-in (2% of requests, 21/week) is one driver's round trip from the dealer to a private customer and back, priced as two cars: list €111, typical fee only 0.53x list (one-car 0.95x). We quote them 1.6–2.1x (private surcharge) and win 38/210; margin €68 per trade-in vs ~€39 per car. 34/38 on time; the 4 late ones were days late (missed 1-hour slot).
+- **Result:** 1.25x: l8 €127,440 (+€2.4k), l8x €132,312 (−€3.4k), worst 92.6%. 1.15x: l8 €124,405 (−€0.6k). More trade-ins = more days-late ones. Off.
+
+## Experiment 54: longer links in chains (`pair_km` 50 → 80 / 120) ✗
+
+- **Result:** 80 km: l8 €127,508 (+€2.5k), l8x €135,002 (−€0.8k), worst 92.5%; lone cars 141 → 128/week, 3-car chains 80 → 116 cars, but the total fee per car barely moved. 120 km: l8 €126,595 (+€1.6k). Noise. Off.
+
+## Experiment 55: charging stop only on routes over 200 km (`charge_km=200`) ✓
+
+- **Starter bug:** `stops_for` added a charging stop (40 min) to every electric car under 30%, but RULES require one only on a route over 200 km. 11 of the 15.6 such cars a week drive ≤ 200 km: they paid the driver for the stop and were kept out of chains.
+- **Result:** l8 €128,446 (+€3.4k), l8x €137,900 (+€2.1k), l8y €150,673 (+€0.8k): **€417,019 over 30 weeks (+€6.4k, +1.6%), worst 92.9%**, 30/30 ranked → preset `l8_charge`. One fine in 10 weeks: a booked car whose destination the dealer changed from 163 to 507 km (a booked gig can't get a stop added; releasing costs more).
+
+## Experiment 56: private-address cars in chains, with the charging fix (`chain_private=1`) ✗
+
+- **Result:** l8 €126,276 vs €128,446 (−€2.2k), worst 94.0%. A private slot is too narrow for a chain. Off.

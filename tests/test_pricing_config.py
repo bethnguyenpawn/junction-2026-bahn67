@@ -10,6 +10,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
+import dispatch
 import notes
 import pricing
 from config import DAY, DEFAULT, HOUR, PRESETS, Params, from_overrides
@@ -224,6 +225,36 @@ class PairChange(unittest.TestCase):
         self.assertEqual(posted, ["A", "B"])
 
 
+class Charging(unittest.TestCase):
+    """RULES: an electric car under 30% needs a charging stop only on a route over 200 km (Params.charge_km)."""
+
+    def stops(self, km, charge_km):
+        window = {"from": 0, "to": DAY}
+        car = {"premium": False, "electric": True, "chargePercent": 20}
+        order = {
+            "id": "A",
+            "legs": [
+                {
+                    "car": car,
+                    "pickup": {"placeId": "x", "privateAddress": False, "window": window},
+                    "delivery": {"placeId": "y", "privateAddress": False, "window": window},
+                }
+            ],
+            "deadline": DAY,
+        }
+        roads = {("x", "y"): {"km": km, "minutes": km}}
+        return dispatch.stops_for(order, [0], None, dispatch.Retry(), charge_km=charge_km, roads=roads)
+
+    def test_short_route_needs_no_charging_stop(self):
+        self.assertFalse(self.stops(150, 200)[0]["withCharging"])
+
+    def test_long_route_keeps_the_charging_stop(self):
+        self.assertTrue(self.stops(250, 200)[0]["withCharging"])
+
+    def test_starter_rule_charges_every_low_battery_car(self):
+        self.assertTrue(self.stops(150, 0)[0]["withCharging"])
+
+
 class Chains(unittest.TestCase):
     """Desk.build_chains: one driver takes several cars when each delivery is near the next pickup."""
 
@@ -398,6 +429,7 @@ class Config(unittest.TestCase):
                 "l8_plan2",
                 "l8_chain",
                 "l8_notes",
+                "l8_charge",
                 "l8_plan_match",
                 "l8_guarded",
                 "l8_v3",

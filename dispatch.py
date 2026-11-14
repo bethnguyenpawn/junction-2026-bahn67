@@ -766,6 +766,10 @@ class Desk:
             }
         )
 
+    def stops_for(self, order: Order, legs: list[int], note: Note | None, retry: Retry) -> list[StopRef]:
+        """stops_for with what the desk knows: the note's facts, the clock and the road distances."""
+        return stops_for(order, legs, note, retry, self.facts(order["id"]), self.now, self.p.charge_km, self.roads)
+
     def facts(self, order_id: str) -> notes.Facts | None:
         """What the order's note says (Params.note_reader), read once; None = the starter's reader."""
         if not self.p.note_reader:
@@ -847,7 +851,7 @@ class Desk:
         if (leg["pickup"]["privateAddress"] or leg["delivery"]["privateAddress"]) and not self.p.chain_private:
             return None
         note = self.requests[order_id]["note"]
-        stops = without_windows(stops_for(order, [0], note, Retry(), self.facts(order_id), self.now), self.now)
+        stops = without_windows(self.stops_for(order, [0], note, Retry()), self.now)
         return None if stops[0].get("withCharging") and not self.p.chain_charging else stops
 
     def chain_minutes(self, first: list[StopRef], second: list[StopRef]) -> int | None:
@@ -1017,7 +1021,7 @@ class Desk:
             "manualLicence": retry.manual_licence or self.manual([order["id"]]),
         }
         note = self.requests[order["id"]]["note"]
-        stops = without_windows(stops_for(order, legs, note, retry, self.facts(order["id"]), self.now), self.now)
+        stops = without_windows(self.stops_for(order, legs, note, retry), self.now)
         self.held.pop(order["id"], None)
         self.first_posted.setdefault(order["id"], self.now)
         self.outbox.append(
@@ -1280,10 +1284,18 @@ def without_windows(stops: list[StopRef], before: float) -> list[StopRef]:
 
 
 def stops_for(
-    order: Order, legs: list[int], note: Note | None, retry: Retry, facts: notes.Facts | None = None, now: int = 0
+    order: Order,
+    legs: list[int],
+    note: Note | None,
+    retry: Retry,
+    facts: notes.Facts | None = None,
+    now: int = 0,
+    charge_km: float = 0,
+    roads: dict | None = None,
 ) -> list[StopRef]:
-    """A pickup and a delivery per leg; a charging stop for an electric car under 30%; own windows only when narrower.
-    The note is read by notes.py when its facts are given, else by the starter's keyword matcher."""
+    """A pickup and a delivery per leg; a charging stop for an electric car under 30% (with charge_km only on a route
+    longer than that); own windows only when narrower. The note is read by notes.py when its facts are given, else by
+    the starter's keyword matcher."""
     stops: list[StopRef] = []
     for leg in legs:
         car, pickup, delivery = (
@@ -1309,6 +1321,9 @@ def stops_for(
             due = notes.due(facts, delivery_base["to"])
             delivery_window = {**delivery_base, "to": due} if due >= delivery_base["from"] else delivery_base
         low_battery = car["electric"] and car["chargePercent"] is not None and car["chargePercent"] < 30
+        if low_battery and charge_km and roads:  # RULES: the charging stop is needed only on a route over 200 km
+            road = roads.get((pickup["placeId"], delivery["placeId"]))
+            low_battery = road is None or road["km"] > charge_km
         first: StopRef = {
             "orderId": order["id"],
             "leg": leg,
