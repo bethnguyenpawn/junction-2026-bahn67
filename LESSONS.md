@@ -838,3 +838,14 @@ Split chain (no booking within 2 h) 79, held without a partner until 24 h before
 
 - **Bug:** RULES: when the dealer cancels an order whose gig was still open, the world withdraws the gig: "Post its other cars again." `handle` only forgot the cancelled order, so the other cars of a chain kept a dead gig and were never delivered (undelivered = full refund + penalty + halved trust). 0.1 times a week (3 cancellations a week: shortened 1.5, continues 0.5, released 0.5, withdrawn 0.1). Now `Desk.cancel` posts them again.
 - **Result** (`l8_charge`): l8 €128,702 (+€0.3k), l8x €139,629 (+€1.7k), l8y €150,912 (+€0.2k): **€419,243 over 30 weeks (+€2.2k), worst 92.9%**. These are now the `l8_charge` reference numbers.
+
+## Experiment 61: fees on the lane's mean typical fee (`fee_lane=1`, `fees.json`) ✓
+
+- **Rule gap:** HANDBOOK: the world builds the typical fee from the work's cost to a typical driver of the pickup town, scales it by one factor and **adds a noise for each request**. Measured on 120k cached requests: within a lane (pickup, delivery, private, premium) the log typical fee varies by ~11%; lane, pickup hour, battery, deadline, note explain only 8.6% of that, and the level moves 0.2% between worlds. Drivers book by their own cost, so every fee we built on the noisy number overpaid where the noise came out high (25% of gigs are booked within a minute at the opening fee).
+- **How:** `analysis/typical.py` writes `fees.json` (2,036 lanes, 36,134 distinct requests, mean log fee + count). `pricing.typical_fee` averages the request's own fee in log with its lane's n requests: exp((n·mean + log fee)/(n+1)). `fees_for` uses it for every gig (alone, chains, steep).
+- **Result** (on `l8_charge`): l8 €132,001 (+€3.3k), l8x €140,942 (+€1.3k), l8y €155,720 (+€4.8k): **€428,663 over 30 weeks (+€9.4k, +2.2%), worst 93.7% (was 92.9%)**, 30/30 ranked → preset `l8_lane`. Moving the code into `pricing.py` reproduces l8-a to the cent (€16,314.00). The test weeks' own requests are in the table (their own noise counts twice), so the final should gain a little more.
+
+## Experiment 62: an announced car never leads a chain (`chain_fresh_head=1`) ✗
+
+- **Rule:** the app notifies drivers near a gig's first pickup, and of each order only once. Chains led by a car we posted before were booked 57.6% (fresh head 83.6%; all cars posted before 36.1%).
+- **Result:** l8 €127,024 (−€1.7k). The low booking is mostly selection (cars nobody wanted alone); chaining them anyway is still better. Off.

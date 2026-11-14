@@ -3,9 +3,11 @@
 python -m unittest discover -s tests
 """
 
+import math
 import os
 import sys
 import unittest
+import unittest.mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -254,6 +256,28 @@ class Cancel(unittest.TestCase):
         self.assertEqual(desk.gigs_of("B"), ["g1"])
 
 
+class LaneFee(unittest.TestCase):
+    """Params.fee_lane: a one-car request's typical fee is averaged in log with its lane's other requests."""
+
+    def desk(self, fee_lane, legs=1):
+        desk = Desk(None, 8, 0, Params(fee_lane=fee_lane))
+        place = {"privateAddress": False}
+        leg = {"pickup": {**place, "placeId": "x"}, "delivery": {**place, "placeId": "y"}, "car": {"premium": False}}
+        desk.requests["A"] = {"referenceFeeCents": 8000, "legs": [leg] * legs}
+        return desk
+
+    def test_noisy_fee_moves_to_the_lane_mean(self):
+        with unittest.mock.patch.dict(pricing.LANE_FEES, {"x>y>0>0": [math.log(4000), 3]}):
+            self.assertAlmostEqual(self.desk(1).typical_fee("A"), 4000 * 2**0.25, places=6)  # 3 at 4000, 1 at 8000
+
+    def test_off_unknown_lane_or_trade_in_keep_the_request_fee(self):
+        with unittest.mock.patch.dict(pricing.LANE_FEES, {"x>y>0>0": [math.log(4000), 3]}, clear=True):
+            self.assertEqual(self.desk(0).typical_fee("A"), 8000)
+            self.assertEqual(self.desk(1, legs=2).typical_fee("A"), 8000)
+        with unittest.mock.patch.dict(pricing.LANE_FEES, {}, clear=True):
+            self.assertEqual(self.desk(1).typical_fee("A"), 8000)
+
+
 class Charging(unittest.TestCase):
     """RULES: an electric car under 30% needs a charging stop only on a route over 200 km (Params.charge_km)."""
 
@@ -459,6 +483,7 @@ class Config(unittest.TestCase):
                 "l8_chain",
                 "l8_notes",
                 "l8_charge",
+                "l8_lane",
                 "l8_plan_match",
                 "l8_guarded",
                 "l8_v3",

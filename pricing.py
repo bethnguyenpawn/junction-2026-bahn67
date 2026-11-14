@@ -28,6 +28,12 @@ from config import DAY, HOUR, Params
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "lanes.json")) as _f:
     DEST_OFFSET: dict[str, float] = json.load(_f)
 
+try:  # one-car lane -> [mean log typical fee in cents, requests seen] (analysis/typical.py, Params.fee_lane)
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "fees.json")) as _f:
+        LANE_FEES: dict[str, list[float]] = json.load(_f)
+except FileNotFoundError:
+    LANE_FEES = {}
+
 TRUST_CAP = 25  # RULES: each dealer counts our on-time orders up to 25, +1% accepted price each
 DECLINE_MULT = 10.0  # a quote this far above list never wins and costs nothing (no quote would cost goodwill)
 
@@ -122,7 +128,7 @@ def flat_mult(request: PriceRequest, level: int, params: Params, s: Situation) -
     if p.big_n and s.dealer_requests >= p.big_n:
         mult -= p.big_cut
     if p.cost_k:  # our cost follows the typical fee; the competitor's price follows the list price
-        mult += p.cost_k * (request["referenceFeeCents"] / request["options"][0]["listPriceCents"] - p.cost_mid)
+        mult += p.cost_k * (typical_fee(request, p) / request["options"][0]["listPriceCents"] - p.cost_mid)
     if s.monday:
         mult += p.monday_add
     if s.outage:
@@ -219,6 +225,23 @@ def slack(request: PriceRequest, option: DeliveryOption, s: Situation) -> int:
     wait = max(0, ready - max(request["respondBy"], stated_from))
     moved = max(0, ready // DAY - stated_from // DAY) * DAY
     return notes.due(s.facts, option["deadline"] + moved) - s.drive_min - request["respondBy"] - wait
+
+
+def lane_key(leg: dict) -> str:
+    """A one-car lane of the typical-fee table: pickup>delivery>private>premium."""
+    private_stop = int(bool(leg["pickup"]["privateAddress"] or leg["delivery"]["privateAddress"]))
+    return f"{leg['pickup']['placeId']}>{leg['delivery']['placeId']}>{private_stop}>{int(leg['car']['premium'])}"
+
+
+def typical_fee(request: PriceRequest, p: Params) -> float:
+    """The request's typical fee. With fee_lane, a one-car request's fee is averaged (in log) with the other requests
+    of its lane: the world adds ~11% noise to each typical fee, and drivers book by their own cost (Exp. 61)."""
+    fee = request["referenceFeeCents"]
+    known = LANE_FEES.get(lane_key(request["legs"][0])) if p.fee_lane and len(request["legs"]) == 1 else None
+    if known is None:
+        return fee
+    mean, n = known
+    return math.exp((n * mean + math.log(fee)) / (n + 1))
 
 
 def private(request: PriceRequest) -> bool:

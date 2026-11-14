@@ -653,7 +653,8 @@ class Desk:
     def build_chains(self, cars: dict[str, list[StopRef]]) -> list[list[str]]:
         """Greedy chaining: repeatedly joins the two chains with the best link (a round trip home first, with
         chain_home also a chain ending where many drivers live, then the shortest empty drive) while one driver can
-        still do the whole chain on time (chain_fits)."""
+        still do the whole chain on time (chain_fits). With chain_fresh_head a car we posted before never leads a
+        chain: the app notifies drivers near a gig's first pickup, and of each order only once (RULES)."""
         p = self.p
         place = {oid: (stops[0]["orderId"], self.orders[oid]["legs"][0]) for oid, stops in cars.items()}
         links = {  # tail car -> [(link minutes, head car)] within pair_km
@@ -676,6 +677,8 @@ class Desk:
         while True:
             best = None
             for head, chain in chains.items():
+                if p.chain_fresh_head and head in self.first_posted:
+                    continue  # its drivers heard of it already: a chain led by it would notify nobody
                 for minutes, nxt in links[tail_of[head]]:
                     if nxt not in chains or nxt == head or len(chain) + len(chains[nxt]) > p.chain_max:
                         continue
@@ -942,7 +945,7 @@ class Desk:
         """The fee schedule of a gig: the typical fee of each car it carries; steep once any order is urgent."""
         order_ids = list(dict.fromkeys(stop["orderId"] for stop in stops))
         fee = sum(
-            self.requests[stop["orderId"]]["referenceFeeCents"] / len(self.requests[stop["orderId"]]["legs"])
+            self.typical_fee(stop["orderId"]) / len(self.requests[stop["orderId"]]["legs"])
             for stop in stops
             if stop["kind"] == "pickup"
         )
@@ -972,6 +975,9 @@ class Desk:
         horizon = self.now + p.slow_after_h * HOUR
         orders = [self.orders.get(oid) for oid in order_ids]
         return p.slow_every_min if all(o is not None and self.last_pickup(o) >= horizon for o in orders) else 0
+
+    def typical_fee(self, order_id: str) -> float:
+        return pricing.typical_fee(self.requests[order_id], self.p)
 
     def home_factor(self, last: StopRef) -> float:
         """Fee factor for a gig that ends where many drivers live (Params.home_n): one of them nearly always takes

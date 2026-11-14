@@ -4,7 +4,7 @@ Status, what we learned, and what's next. Every experiment with its numbers: [LE
 
 ## Status (Sat 14 Nov, 23:20)
 
-**Use `--preset l8_charge`** (`l8_notes` + charging stops only where the rules need them, Exp. 55) for ranking runs and the final. Fallback: `l8_notes`.
+**Use `--preset l8_lane`** (`l8_charge` + fees built on each lane's mean typical fee, Exp. 61) for ranking runs and the final. Fallback: `l8_charge`.
 
 | Level 8 | Test weeks | Per week | Worst week |
 |---|---|---|---|
@@ -15,7 +15,8 @@ Status, what we learned, and what's next. Every experiment with its numbers: [LE
 | `l8_plan2` (+ price 1.40, links ≤ 50 km) | 30 weeks: `l8` €112,459, `l8x` €119,506, `l8y` €138,040 | €12,334 | 91.9%, 30/30 ranked |
 | `l8_chain` (+ chains of 3, plan every hour) | 30 weeks: `l8` €119,744, `l8x` €132,510, `l8y` €142,551 | €13,160 (+6.7%) | 90.3% (l8y-a), 30/30 ranked |
 | `l8_notes` (+ reads the dealers' notes; Exp. 52 slack fix) | 30 weeks: `l8` €125,036, `l8x` €135,759, `l8y` €149,830 | €13,688 (+4.0%) | 93.8%, 30/30 ranked |
-| **`l8_charge`** (+ charging stop only on routes > 200 km, cancellation fix) | 30 weeks: `l8` €128,702, `l8x` €139,629, `l8y` €150,912 | **€13,975 (+2.1%)** | **92.9%**, 30/30 ranked |
+| `l8_charge` (+ charging stop only on routes > 200 km, cancellation fix) | 30 weeks: `l8` €128,702, `l8x` €139,629, `l8y` €150,912 | €13,975 (+2.1%) | 92.9%, 30/30 ranked |
+| **`l8_lane`** (+ fees on the lane's mean typical fee) | 30 weeks: `l8` €132,001, `l8x` €140,942, `l8y` €155,720 | **€14,289 (+2.2%)** | **93.7%**, 30/30 ranked |
 
 | Practice ranking round | Preset | Us | Rank | 10th / 1st |
 |---|---|---|---|---|
@@ -29,9 +30,9 @@ Status, what we learned, and what's next. Every experiment with its numbers: [LE
 
 **Gap:** in the 20:00 test final the top 10 won 390–500 orders at €41–49 each; we won 334 at €38.8 (+€3.7k needed, +28%). Of 1,030 requests we won 340, lost 558 on price and declined 132 (105 of them > 550 km). Winning more by any means tried tonight lowers the margin: drivers are scarce, so extra cars cost more (Exp. 45).
 
-Ranking round: one person runs `for i in 1 2 3 4 5; do caffeinate -i .venv/bin/python main.py --board --level 8 --preset l8_charge || break; done` (only one ranking run per team at a time; a second one gets HTTP 409).
+Ranking round: one person runs `for i in 1 2 3 4 5; do caffeinate -i .venv/bin/python main.py --board --level 8 --preset l8_lane || break; done` (only one ranking run per team at a time; a second one gets HTTP 409).
 
-## The level-8 system (`--preset l8_charge`)
+## The level-8 system (`--preset l8_lane`)
 
 1. **Price:** 1.40× the list price (the competitor is 26–54% above list); 0.2× less where ≥ 40 drivers live within 30 km of the pickup; 0.2× more for private addresses; plus the competitor's offset for the delivery place (−0.17× Vantaa … +0.18× Joensuu, `lanes.json`).
 2. **Backlog brake:** +0.03× per won order still without a driver, so we take fewer cars when overloaded.
@@ -41,7 +42,8 @@ Ranking round: one person runs `for i in 1 2 3 4 5; do caffeinate -i .venv/bin/p
 6. **Notes** (`notes.py`): reads each dealer note (Finnish, Swedish, English, with typos and corrections) into ready time, deadline, the sites' real hours, plates and manual gearbox; right on all 5,790 noted cars of our cached weeks. The pickup goes in the site's real hours from the ready time, the delivery by the earlier deadline, with transfer plates and a manual-licence audience when needed. Failed visits 8.7 → 0.3 a week, late orders 14.3 → 11.3.
 7. **Charging:** an electric car under 30% gets a charging stop only on a route over 200 km (RULES); the starter added one to every such car, so 11 short-route cars a week paid for a stop and could not join chains (Exp. 55).
 8. **Cancellations:** when a dealer cancels a car of an unbooked chain, the world withdraws the gig; we post its other cars again (RULES; before, they were never delivered; Exp. 60).
-9. **Recovery:** after a crash or server restart, the bot rebuilds its state from the world (tested: same result as without the restart); held cars are posted at once.
+9. **Fee base:** every fee is a multiple of the car's typical fee, and the world adds ~11% noise to each one. We use the lane's mean typical fee from 36k past requests (`fees.json`), averaged with the request's own, so a car whose typical fee came out high no longer opens high (Exp. 61).
+10. **Recovery:** after a crash or server restart, the bot rebuilds its state from the world (tested: same result as without the restart); held cars are posted at once.
 
 ## What we learned
 
@@ -70,7 +72,7 @@ Ranking round: one person runs `for i in 1 2 3 4 5; do caffeinate -i .venv/bin/p
 | `config.py` | `Params` (every tunable number; used ones first, tested-and-off ones last) and `PRESETS`. Defaults = kit starter. |
 | `evaluate.py` | Benchmark over 10 fixed weeks (≤ 4 worlds at once) → `results/log.jsonl`. |
 | `market.py` | `Market`: the competitor's level this week and today, learned from our wins and losses (`market_k`, off). |
-| `analysis/` | `orders.py` (late%/margin by distance, day, town), `market.py` (win rate by price, drivers near pickup), `winmodel.py` / `latemodel.py` / `lanes.py` / `competitor.py` (fit the models, need numpy), `fees.py` (how fast drivers book), `sharing.py` (cars shared vs alone). |
+| `analysis/` | `typical.py` (writes `fees.json`: each lane's mean typical fee), `orders.py` (late%/margin by distance, day, town), `market.py` (win rate by price, drivers near pickup), `winmodel.py` / `latemodel.py` / `lanes.py` / `competitor.py` (fit the models, need numpy), `fees.py` (how fast drivers book), `sharing.py` (cars shared vs alone). |
 | `tests/` | Offline unit tests: `python -m unittest discover -s tests`. |
 
 ## Next (in priority order)
@@ -81,13 +83,13 @@ Still 42% of cars travel alone (140/week at €68 vs €42 shared): held > 24 h 
 
 1. **Close the gap to the top 10** (round 21:00: −€2.8k/week vs 10th, behind in all 5 weeks, ~+20% needed). Adopt a change before the final only if it wins > €3k on l8 + l8x with every week ≥ 91%.
 2. **Late orders left** (11.3/week): booked in time but late 3.3, driver drops 2.9, order changes 2.6, booked only after the deadline warning 1.9. Snow: post and price snow-touched orders earlier/higher.
-3. **Final Sun 09:00** with `l8_charge`. Freeze the code Saturday night.
+3. **Final Sun 09:00** with `l8_lane`. Freeze the code Saturday night.
 
-**Estimated margin:** `l8_charge` ≈ €13,975/week on our 30 test weeks (+2.1% over `l8_notes`, +6.2% over `l8_chain`).
+**Estimated margin:** `l8_lane` ≈ €14,289/week on our 30 test weeks (+2.2% over `l8_charge`, +4.4% over `l8_notes`, +8.6% over `l8_chain`).
 
-**Ranking runs:** one person, five in a row: `for i in 1 2 3 4 5; do caffeinate -i .venv/bin/python main.py --board --level 8 --preset l8_charge || break; done`.
+**Ranking runs:** one person, five in a row: `for i in 1 2 3 4 5; do caffeinate -i .venv/bin/python main.py --board --level 8 --preset l8_lane || break; done`.
 
-**After a crash or server restart:** a practice or ranking run that stopped continues with `.venv/bin/python main.py --world WORLD_ID --preset l8_charge` (the command is printed when it stops). The bot now also waits and rebuilds by itself.
+**After a crash or server restart:** a practice or ranking run that stopped continues with `.venv/bin/python main.py --world WORLD_ID --preset l8_lane` (the command is printed when it stops). The bot now also waits and rebuilds by itself.
 
 **Keys:** the final and the submission are played with the `bahn67` key in `.env`.
 
@@ -97,7 +99,7 @@ Still 42% of cars travel alone (140/week at €68 vs €42 shared): held > 24 h 
 
 - **Sat 14:00, 20:00:** test finals (live clock, ~19 min).
 - **Sun 01:00:** last test final (live clock, same as the real one): start `--final` a few minutes before.
-- **Sun 09:00:** the final (level 8, ~34 min, moved from 08:00). Start `main.py --final --preset l8_charge` before 09:00; it waits and plays by itself. Leave it running until ~09:35; if it crashes, run the same command again (it continues the same week). The team page shows from ~30 min before whether we are connected.
+- **Sun 09:00:** the final (level 8, ~34 min, moved from 08:00). Start `main.py --final --preset l8_lane` before 09:00; it waits and plays by itself. Leave it running until ~09:35; if it crashes, run the same command again (it continues the same week). The team page shows from ~30 min before whether we are connected.
 - **Sun 10:00:** submission on the Junction platform: submission hash (team page), code link, 5–10 slides.
 
 ## Rules

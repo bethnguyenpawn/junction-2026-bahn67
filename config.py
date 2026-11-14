@@ -83,6 +83,7 @@ class Params:
     hold_h: float = 8.0  # hold an order only with >= this many hours until its latest pickup
     wait_h: float = 0.0  # an unpaired held car waits for the next plan only with >= this many hours spare (0 = hold_h)
     split_after_min: int = 0  # a two-car gig no driver booked within this many minutes goes back to one gig per car
+    chain_fresh_head: int = 0  # Exp. 62: 1 = a car posted before is never the first car of a chain (no new notice)
     chain_max: int = 0  # >= 2: plan chains of up to this many cars per driver, also from posted unbooked one-car gigs
     # (Desk.plan_chains); 0 = pairs of held cars only (Desk.plan_pairs)
     chain_replan: int = 0  # 1: a chain no driver booked within split_after_min goes back into the next plan (not split)
@@ -104,6 +105,7 @@ class Params:
     # dealer's note (right on all 5,790 noted cars of cached weeks); 0 = the starter's keyword matcher.
     note_reader: int = 0
     charge_km: float = 0.0  # Exp. 55: > 0 = charging stop for a car under 30% only on routes over this (RULES: 200)
+    fee_lane: int = 0  # Exp. 61: 1 = fee base = typical fee averaged with its lane's (fees.json): the world adds noise
 
     # --- Steep schedule after deadline_close.
     steep_open_mult: float = 1.5
@@ -242,6 +244,10 @@ PRESETS["l8_notes"] = replace(PRESETS["l8_chain"], note_reader=1)
 # Exp. 55: a charging stop only where RULES need one (route over 200 km), not for every electric car under 30%: the
 # short-route cars pay no stop and can join chains. +€6.4k over 30 weeks (+1.6%), worst 92.9%.
 PRESETS["l8_charge"] = replace(PRESETS["l8_notes"], charge_km=200)
+
+# Exp. 61: fees built on the lane's mean typical fee (fees.json, analysis/typical.py) instead of the request's noisy
+# one (~11% noise per request; drivers book by their own cost). +€9.4k over 30 weeks (+2.2%), worst 93.7%.
+PRESETS["l8_lane"] = replace(PRESETS["l8_charge"], fee_lane=1)
 
 PRESETS["l8_guarded"] = replace(
     PRESETS["l8"], opt=1, opt_backlog=0.04, opt_guard_late=0.08, opt_guard_backlog=3, opt_delta_cap=0.06
