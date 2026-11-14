@@ -37,29 +37,41 @@ _PLACES: dict = {}
 NOTIFY_KM = 30  # RULES: the app notifies a driver of a gig whose first pickup is within 30 km of their home
 
 
-def roads_of(client) -> dict:
-    """The map's roads keyed by (from, to). The map is the same for every world and costs no token: load once."""
+def _load_map(client) -> None:
+    """The map is the same for every world and costs no token: load it once."""
     if not _ROADS:
         m = client.map()
         _ROADS.update({(r["from"], r["to"]): r for r in m["roads"]})
         _PLACES.update({p["id"]: p for p in m["places"]})
+
+
+def roads_of(client) -> dict:
+    """The map's roads keyed by (from, to)."""
+    _load_map(client)
     return _ROADS
 
 
+def places_of(client) -> dict:
+    """The map's places keyed by id, with lat and lon."""
+    _load_map(client)
+    return _PLACES
+
+
 def straight_km(a: dict, b: dict) -> float:
+    """Straight-line km between two places (the app's notification radius is a straight line)."""
     dlat = math.radians(b["lat"] - a["lat"])
     dlon = math.radians(b["lon"] - a["lon"]) * math.cos(math.radians((a["lat"] + b["lat"]) / 2))
     return 6371 * math.hypot(dlat, dlon)
 
 
-def drivers_near(roster: list[DriverProfile]) -> dict[str, list[DriverProfile]]:
+def drivers_near(roster: list[DriverProfile], places: dict) -> dict[str, list[DriverProfile]]:
     """Place id -> the drivers who live within NOTIFY_KM of it. At level 8 each town keeps its own share of
     the drivers, so this says where a car is easy to move, and who lives near a delivery place."""
     homes: dict[str, list[DriverProfile]] = {}
     for driver in roster:
         homes.setdefault(driver["homePlaceId"], []).append(driver)
-    return {pid: [d for h, ds in homes.items() if straight_km(p, _PLACES[h]) <= NOTIFY_KM for d in ds]
-            for pid, p in _PLACES.items()}
+    return {pid: [d for h, ds in homes.items() if straight_km(p, places[h]) <= NOTIFY_KM for d in ds]
+            for pid, p in places.items()}
 
 
 # The events that need an answer. Views and account lines arrive with the next event that needs an answer.
@@ -116,10 +128,10 @@ class Desk:
     the world applies them at the current minute."""
 
     def __init__(self, world: World, level: int, now: int, params: Params, roads: Optional[dict] = None,
-                 roster: Optional[list[DriverProfile]] = None):
+                 near: Optional[dict[str, list[DriverProfile]]] = None):
         self.world, self.level, self.now, self.p = world, level, now, params
         self.roads = roads or {}  # (from place, to place) -> {"km", "minutes"}
-        self.near = drivers_near(roster) if roster else {}  # place id -> drivers living within 30 km
+        self.near = near or {}  # place id -> drivers living within 30 km (empty = not loaded)
         self.last_seen: dict[str, int] = {}  # driver id -> minute they last viewed one of our gigs
         self.offers_sent: dict[tuple[str, int], int] = {}  # (driver id, day) -> direct offers sent
         self.outbox: list[Action] = []
@@ -435,7 +447,8 @@ class Desk:
 
     def offer(self, action: PostAction, gig_id: str) -> None:
         """Direct offers below the app's fee to drivers who live near the delivery place: the app does not
-        notify them, and the trip home costs them nothing, so the car is cheap for them (HANDBOOK)."""
+        notify them, and the trip home costs them nothing (HANDBOOK). Off by default: in tests almost all
+        offers went unread or were declined (LESSONS.md, Experiment 18)."""
         order_id = action["stops"][0]["orderId"]
         order = self.orders.get(order_id)
         if not self.p.offer_mult or not self.near or order is None or order_id in self.urgent:

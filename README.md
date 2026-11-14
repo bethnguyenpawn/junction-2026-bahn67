@@ -44,21 +44,43 @@ Our development priorities are:
 3. Maintain reliable on-time deliveries.
 4. Build a robust system capable of handling Level 8 challenges.
 
-## 📊 Status
+## 📊 Status (Sat 14 Nov, morning)
 
-**Level 8 (the final's level), `--preset l8`:** **+€9,909/week over 30 test weeks, every week ranked** (worst 91.0% on time). The official starter loses €60,442/week there and is never ranked.
+**Read this first.** Full details: [PROGRESS.md](PROGRESS.md) (status, next steps) · [LESSONS.md](LESSONS.md) (every experiment, including what failed) · [docs/CHALLENGE_SUMMARY.md](docs/CHALLENGE_SUMMARY.md) (the challenge in plain words).
 
-| Level 8, 30 weeks (`l8`, `l8x`, `l8y`) | Margin | Worst week |
+**The final is Sunday 08:00: one level-8 week, live clock, ~34 min.** Only the top 10 by margin (and ≥ 90% on time) present to the jury.
+
+### Where we stand
+
+| | Level-8 margin per week | Notes |
 |---|---|---|
-| Official starter (10 weeks) | −€604,425, 0/10 ranked | 39.3% |
-| Previous preset `l8_v1` | €260,043 | 92.0% |
-| **Current `l8`** | **€297,267, 30/30 ranked** | **91.0%** |
+| Official starter | −€60,442 | never ranked (46% late) |
+| `--preset l8` (current, tested) | **+€9,909** (30 test weeks, all ranked, worst 91.0% on time) | use this for ranking runs |
+| `--preset l8b` (candidate) | +€10,043 (20 weeks, worst 92.3%), +8% over `l8` on the same weeks | final check on `l8y` still to do |
+| Practice round "Saturday 00:00" (old preset `l8_v1`) | €9,299 (€46,496 / 5 weeks) | **rank 43 of 62** |
+| 10th place / House best / 1st in that round | €15,095 / €14,358 / €17,185 | top 10 needs ≈ **+€6,000/week** |
 
-**Practice ranking (level 8, round "Saturday 00:00", with `l8_v1`): rank 43 of 62, €46,496 over 5 weeks.** 10th place: €75,475. House best: €71,790.
-Candidate `--preset l8b` (cheaper where many drivers live, dearer for private addresses): +8% over `l8` on 20 weeks, being checked.
+### How our level-8 system decides
 
-How it works: quote 1.45× list price, higher when many orders still lack a driver; decline trips over 550 km; only offer delivery options with ≥ 8 h to find a driver; driver fees open at 0.8× the typical fee and rise every 30 min.
-Details: [PROGRESS.md](PROGRESS.md) (status, next steps, deadlines) · [LESSONS.md](LESSONS.md) (every experiment, including what failed).
+1. **Quote above list price:** 1.45× list (competitor is 26–54% above list), +0.03× for each won order still without a driver (brake when overloaded).
+2. **Decline** (quote 10× list: never wins, costs nothing) trips over 550 km, and requests whose delivery options leave < 8 h to find a driver.
+3. **Driver fee:** opens at 0.8× the typical fee, +0.1× every 30 min up to 1.3×; after `deadline_close` 1.5× rising to 2.5×.
+4. `l8b` adds: 0.2× cheaper where ≥ 40 drivers live within 30 km of the pickup, 0.2× dearer for private addresses, base 1.4×, decline over 600 km.
+
+### What we know about the game (measured)
+
+- We win ~23% of the requests we quote. Win rate vs our price: 1.2× list 61%, 1.4× 40%, 1.6× 19%. Profit per request is flat from 1.1× to 1.4×, so **price tuning alone won't close the gap**.
+- We use only 100–150 of the 650–950 drivers a week. **Driver fees are ~60% of revenue: cheaper drivers are the big lever.**
+- Didn't work: dealer-trust pricing, flat fees, other fee caps, direct offers to drivers near the delivery town (almost never accepted), separate prices per delivery option.
+
+### Next
+
+1. Check `l8b` on the `l8y` weeks → make it the default if it holds.
+2. **Test final Sat 14:00 / 20:00:** run `python main.py --final --preset l8` to check the live loop keeps up and survives a restart (never run live yet).
+3. Cheaper drivers: multi-car gigs (return trips, two cars from one yard), offers to drivers who just finished our gigs nearby.
+4. Price-war day (competitor −20% for one day) and handling after `deadline_close`.
+
+**Team rules:** one change at a time on the same seeds (`l8`, then `l8x`; `l8y` only as a final check), log it in LESSONS.md; at most 6 practice worlds per person running at once (team limit 8); ranking runs (`--board`) only when agreed; never commit `.env`.
 
 ## 🚀 Getting Started
 
@@ -82,12 +104,13 @@ python evaluate.py --level 8 --preset l8                         # benchmark on 
 python evaluate.py --level 8 --preset l8 --seed-prefix l8x       # same on 10 unseen weeks
 python evaluate.py --level 8 --preset l8 --set quote_mult=1.5 --note "what I'm trying"
 python analysis/orders.py --note "what I'm trying"               # which orders were late / lost money
+python analysis/market.py --note "what I'm trying"               # win rate by price, drivers near pickup
 python main.py --final --preset l8                               # play the final (live)
 python -m unittest discover -s tests                             # offline tests (no key needed)
 ```
 
 - Presets (`config.PRESETS`): `starter` (default, identical to the official starter), `l1`, `l8`, `l8b` (candidate), `l8_v1` (previous). `--set name=value` overrides any `Params` field.
-- Every `evaluate.py` run appends settings and scores to `results/log.jsonl`. Add a row to `LESSONS.md` for each experiment, and check level-8 changes on both seed sets.
+- Every `evaluate.py` run appends settings and scores to `results/log.jsonl`. Add a row to `LESSONS.md` for each experiment, and check level-8 changes on `l8` and `l8x`.
 - Do **not** play ranking runs (`board: true`) without agreeing as a team: each round has only 5 per level.
 
 ### Project Structure
@@ -96,7 +119,7 @@ python -m unittest discover -s tests                             # offline tests
 junction-2026/
 ├── main.py              # Runs a world: practice advance loop + final live-stream loop
 ├── dispatch.py          # Desk: answers events; driver fees, recovery from problems
-├── pricing.py           # Quotes: price multiplier, backlog, distance and slack filters
+├── pricing.py           # Quotes: price multiplier, backlog, distance, slack, driver-density, private-address rules
 ├── config.py            # All tunable parameters (Params) and presets
 ├── evaluate.py          # Benchmark over fixed seeds -> results/log.jsonl
 ├── analysis/            # fees.py, orders.py, market.py: analysis of ended weeks (reveal + events)
@@ -114,7 +137,8 @@ junction-2026/
 - [x] Level 1 profitable: fee ladder (+€3,419/week vs −€2,898 for the starter).
 - [x] **Level 8 profitable and ranked on 30/30 test weeks** (+€9,909/week); practice round "Saturday 00:00": 43/62.
 - [ ] Test the live final loop in a test final (Sat 14:00 / 20:00).
-- [ ] Level 8: dealer trust, handling after `deadline_close`, price-war day.
+- [x] Level 8 research: price curve, driver supply by town, private addresses (candidate `l8b`, +8%).
+- [ ] Level 8: cheaper drivers (multi-car gigs), handling after `deadline_close`, price-war day.
 - [ ] Final (Sun 08:00), then submission by Sun 10:00 (hash, code link, 5–10 slides).
 
 ## 🤝 Collaboration

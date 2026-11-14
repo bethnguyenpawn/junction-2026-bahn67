@@ -66,7 +66,7 @@ PRESETS = {
     # quote 1.4, decline > 600 km. l8 €99,847, l8x €101,017 (+8% over l8), worst week 92.3%. Not yet checked on l8y.
     "l8b": Params(quote_mult=1.4, backlog_k=0.03, decline_km=600, min_slack_h=8, open_mult=0.8, raise_every_min=30,
                   dense_n=40, dense_cut=0.2, private_add=0.2),
-    # Previous level-8 preset (ranked 11/25 in round "Saturday 00:00"): +€79,155 / +€82,446.
+    # Previous level-8 preset (practice round "Saturday 00:00": €46,496, rank 43/62): +€79,155 / +€82,446.
     "l8_v1": Params(quote_mult=1.6, backlog_k=0.01, decline_km=500, min_slack_h=8, open_mult=0.8),
 }
 

@@ -4,17 +4,12 @@
 """
 from __future__ import annotations
 
-import math
 import sys
 from collections import defaultdict
 
 from common import client, fetch, worlds_from_args
 
-
-def km_between(a, b):
-    dlat = math.radians(b["lat"] - a["lat"])
-    dlon = math.radians(b["lon"] - a["lon"]) * math.cos(math.radians((a["lat"] + b["lat"]) / 2))
-    return 6371 * math.hypot(dlat, dlon)
+from dispatch import NOTIFY_KM, straight_km
 
 
 def table(title, groups, cols, min_n=20):
@@ -39,7 +34,7 @@ def main():
         homes = defaultdict(int)
         for drv in d["roster"]:
             homes[drv["homePlaceId"]] += 1
-        near = {p: sum(n for h, n in homes.items() if km_between(places[p], places[h]) <= 30) for p in places}
+        near = {p: sum(n for h, n in homes.items() if straight_km(places[p], places[h]) <= NOTIFY_KM) for p in places}
         money, late = defaultdict(int), set()
         fees = defaultdict(int)
         for e in d["events"]:

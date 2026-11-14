@@ -39,7 +39,7 @@ def quote(request: PriceRequest, level: int, params: Params, km: float = 0.0, ba
                 mult += params.sparse_add
         if level >= 8 and params.trust_w:
             mult *= 1 + params.trust_w * 0.01 * min(trust, TRUST_CAP)
-        if params.decline_km and km > params.decline_km or mult >= DECLINE_MULT / 2:
+        if (params.decline_km and km > params.decline_km) or mult >= DECLINE_MULT / 2:  # far, or priced out
             mult = DECLINE_MULT
     if level >= 4 and params.min_slack_h and mult < DECLINE_MULT:
         # Offer every option that leaves time to find a driver; the dealer picks. None left: decline.

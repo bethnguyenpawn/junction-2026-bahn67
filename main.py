@@ -21,7 +21,7 @@ from spread.types import Score
 
 import config
 from config import DAY, Params
-from dispatch import WAKE_ON, Desk, roads_of
+from dispatch import WAKE_ON, Desk, drivers_near, places_of, roads_of
 
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
@@ -36,15 +36,17 @@ def load_env(path: str = os.path.join(os.path.dirname(os.path.abspath(__file__))
             os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
-def load_roster(world: World, params: Params) -> Optional[list]:
-    """The world's driver list, only when a rule uses it (one extra read)."""
-    return world.roster() if params.dense_n or params.sparse_n or params.offer_mult else None
+def load_near(world: World, params: Params) -> Optional[dict]:
+    """Drivers living near each place, from the world's driver list; only when a rule uses it (one extra read)."""
+    if not (params.dense_n or params.sparse_n or params.offer_mult):
+        return None
+    return drivers_near(world.roster(), places_of(world.client))
 
 
 def play_practice(world: World, level: int, params: Params, verbose: bool = True) -> Score:
     """Steps the world from one event that needs an answer to the next; one request per step."""
     snapshot = world.snapshot()
-    desk = Desk(world, level, snapshot["now"], params, roads_of(world.client), load_roster(world, params))
+    desk = Desk(world, level, snapshot["now"], params, roads_of(world.client), load_near(world, params))
     ends_at = snapshot["endsAt"]
     seen = -1
     while desk.now < ends_at:
@@ -74,7 +76,7 @@ def play_final(world: World, params: Params) -> None:
     if snapshot["now"] >= snapshot["endsAt"]:
         return
     level = next((w["level"] for w in world.client.worlds() if w["worldId"] == world.id), 8)
-    desk = Desk(world, level, snapshot["now"], params, roads_of(world.client), load_roster(world, params))
+    desk = Desk(world, level, snapshot["now"], params, roads_of(world.client), load_near(world, params))
     desk.rejoin(snapshot, history)
     desk.send()
     for event in world.stream(after=history[-1]["seq"] if history else -1, idle=1.0):

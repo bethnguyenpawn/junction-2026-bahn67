@@ -65,10 +65,11 @@ python main.py --final --preset l8                            # the final (live 
 
 0. **Check `l8b` on `l8y`**; if ≥ 91% worst week and more margin, make it `l8`.
 1. **Test `--final --preset l8` in a test final (Sat 14:00 or 20:00).** The live loop has never run; check it keeps up and survives a restart.
-2. **Dealer trust as extra wins, not higher prices** (raising prices failed): e.g. lower the backlog brake for trusted dealers.
-3. **After `deadline_close`:** steep fee level/timing at level 8, or direct offers to drivers near the pickup.
-4. **Price-war day:** competitor −20% on one unannounced day; detect from losing streaks.
-5. Check `--preset l8` on levels 4–7 (sanity), and level 2–3 ideas (multi-car gigs).
+2. **Cheaper drivers** (fees are ~60% of revenue; we use ~15% of the drivers): multi-car gigs (return trips, two cars from one yard), offers to drivers who just finished our gigs nearby.
+3. **Dealer trust as extra wins, not higher prices** (raising prices failed): e.g. lower the backlog brake for trusted dealers.
+4. **After `deadline_close`:** steep fee level/timing at level 8, or direct offers to drivers near the pickup.
+5. **Price-war day:** competitor −20% on one unannounced day; detect from losing streaks.
+6. Check `--preset l8` on levels 4–7 (sanity), and level 2–3 ideas (multi-car gigs).
 
 ## Deadlines
 
