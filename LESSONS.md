@@ -439,3 +439,31 @@ Also checked: gigs for a later day do not overpay (46% book at the opening fee);
 ## Restart test (the final's recovery path) ✓
 
 Played `l8-a` to Wednesday 12:00, threw the desk away, rebuilt it with `Desk.rejoin` from the snapshot and events, played on: **€11,739.88 vs €11,737.33 uninterrupted**, same orders and on-time share. `play_final` now also skips an event whose handling fails and rebuilds after any other error, instead of stopping.
+
+## Experiments 29–30: guarded expected-profit pricing (Sat 14 Nov)
+
+**Bottleneck:** the main headroom is quote selection. Historical notes show top teams win 1.4–2× as many orders, while the company has 650–950 drivers available and uses only 100–150. The fitted win model can improve request-level pricing, but unguarded expected-profit pricing changes which orders we win and is not reliable enough on its own.
+
+### Experiment 29: full optimizer failed the reliability cutoff
+
+Fresh paired `l8-a..j` comparison against `l8_flat`:
+
+| Strategy | Total margin | Overall on time | Worst week | Ranked |
+|---|---:|---:|---:|---:|
+| `l8_flat` | €95,102 | 96.6% | 95.7% | 10/10 |
+| Expected profit, backlog cost 0.04 | €98,767 (+€3,665) | 94.2% | **88.6%** | 9/10 ✗ |
+| Expected profit, backlog cost 0.06 | €88,957 (−€6,145) | 93.8% | **89.5%** | 9/10 ✗ |
+
+On `l8-j`, baseline had 2/56 late Monday orders; the 0.04 candidate had 11/81. At 17:00, late orders were 3/12 for baseline, 5/13 for 0.04 and 5/10 for 0.06. The samples are small, but they show why aggregate margin and on-time share can hide a failing week. Raising the blanket backlog penalty did not fix the risk and reduced margin.
+
+### Experiment 30: guard the optimizer, then hold out `l8z`
+
+Use expected-profit pricing only when fitted late risk is ≤ 8% and driverless backlog is < 3. Cap the price change to ±6% of the flat quote; otherwise fall back to `l8_flat`. Keep the existing 8 h slack and 550 km filters and the same driver fee schedule.
+
+| Matched seeds | `l8_flat` | Guarded | Margin gain | Worst on time (flat → guarded) | Ranked |
+|---|---:|---:|---:|---:|---:|
+| `l8-a..j` (tuning) | €95,102 | €96,019 | +€916 | 95.7% → 94.6% | 10/10 → 10/10 |
+| `l8z-a..j` (fresh holdout) | €94,432 | €95,607 | +€1,175 | 93.3% → 94.6% | 10/10 → 10/10 |
+| **Combined 20 weeks** | **€189,534** | **€191,625** | **+€2,091 (+1.1%)** | **93.3% → 94.6% worst** | **20/20** |
+
+**Decision:** promote the guarded strategy to `l8`; retain the prior flat strategy as `l8_flat`. The holdout increased margin and improved the worst-week on-time share, so this evidence supports the added pricing complexity. The two unguarded variants remain rejected.

@@ -44,6 +44,9 @@ class Params:
     opt_late_trust: float = 0.0     # value of a full-trust dealer's trust lost when late, x list price
     opt_lo: float = 1.0             # price range searched, x list
     opt_hi: float = 2.0
+    opt_guard_late: float = 0.0     # if > 0, use flat pricing when predicted lateness exceeds this share
+    opt_guard_backlog: int = 0      # if > 0, use flat pricing when driverless backlog reaches this count
+    opt_delta_cap: float = 0.0      # if > 0, cap optimizer price difference from flat quote as share of list
 
     # --- Protect dealer trust (level 8): a late order halves the dealer's count, so book drivers sooner for
     # dealers whose count is high.
@@ -107,16 +110,21 @@ PRESETS = {
     "starter": DEFAULT,
     # Level 1: fee ladder by reprice. +€34,186 on l1-a..j (starter -€28,978), worst week 91.1%.
     "l1": Params(open_mult=0.7, ladder_per_hour=0.3, ladder_cap=1.5),
-    # Level 8 (the final): price 1.45x list + 0.03 per driverless order, 0.2 cheaper where >= 40 drivers live within
-    # 30 km of the pickup, 0.2 dearer for private addresses; decline > 550 km; only options with >= 8 h slack;
-    # fee opens 0.8x, +0.1x every 30 min. 30 weeks (l8 €95,102, l8x €99,994, l8y €112,847): €307,943, worst week 92.6%.
-    "l8": Params(quote_mult=1.45, backlog_k=0.03, decline_km=550, min_slack_h=8, open_mult=0.8, raise_every_min=30,
-                 dense_n=40, dense_cut=0.2, private_add=0.2),
+    # Prior flat level-8 strategy: retained for paired comparisons and fallback pricing.
+    # 30 historical weeks (l8/l8x/l8y): €307,943 total, all ranked, worst week 92.6%.
+    "l8_flat": Params(quote_mult=1.45, backlog_k=0.03, decline_km=550, min_slack_h=8, open_mult=0.8,
+                      raise_every_min=30, dense_n=40, dense_cut=0.2, private_add=0.2),
     # Previous l8 (Sat night): same without the driver-density and private-address rules. €297,267, worst 91.0%.
     "l8_v2": Params(quote_mult=1.45, backlog_k=0.03, decline_km=550, min_slack_h=8, open_mult=0.8, raise_every_min=30),
     # Previous level-8 preset (practice round "Saturday 00:00": €46,496, rank 43/62): +€79,155 / +€82,446.
     "l8_v1": Params(quote_mult=1.6, backlog_k=0.01, decline_km=500, min_slack_h=8, open_mult=0.8),
 }
+
+# Expected-profit pricing is used only for low-risk requests while the backlog is small. Its quote is kept
+# within 6% of the proven flat quote. Paired l8/l8z results: +€2,091 over 20 weeks, all ranked, worst 94.6%.
+PRESETS["l8"] = replace(PRESETS["l8_flat"], opt=1, opt_backlog=0.04, opt_guard_late=0.08,
+                         opt_guard_backlog=3, opt_delta_cap=0.06)
+PRESETS["l8_guarded"] = PRESETS["l8"]  # descriptive alias for the promoted strategy
 
 
 def from_overrides(overrides: list[str], base: Params = DEFAULT) -> Params:

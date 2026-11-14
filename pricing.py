@@ -55,14 +55,35 @@ def quote(request: PriceRequest, level: int, params: Params, s: Situation = Situ
     if not options:
         return decline(request)
     if params.opt:
-        prices = {o["kind"]: best_price(request, o, params, s) for o in options}
-        prices = {kind: price for kind, price in prices.items() if price is not None}
+        prices = {}
+        for option in options:
+            flat_price = price_flat(request, option, level, params, s)
+            use_flat = (
+                (params.opt_guard_backlog > 0 and s.backlog >= params.opt_guard_backlog)
+                or (params.opt_guard_late > 0 and late_probability(request, option, params, s) > params.opt_guard_late)
+            )
+            price = flat_price if use_flat else best_price(request, option, params, s)
+            guarded = params.opt_guard_late > 0 or params.opt_guard_backlog > 0 or params.opt_delta_cap > 0
+            if price is None and guarded:
+                price = flat_price
+            if price is not None and params.opt_delta_cap > 0:
+                cap = int(option["listPriceCents"] * params.opt_delta_cap + 0.5)
+                price = min(flat_price + cap, max(flat_price - cap, price))
+            if price is not None:
+                prices[option["kind"]] = price
         return prices or decline(request)
     mult = flat_mult(request, level, params, s)
     if mult >= DECLINE_MULT / 2:  # priced out
         return decline(request)
     return {o["kind"]: int(o["listPriceCents"] * mult * (1.0 if o["kind"] == "same_day" else params.later_mult) + 0.5)
             for o in options}
+
+
+def price_flat(request: PriceRequest, option: DeliveryOption, level: int, params: Params, s: Situation) -> int:
+    """Flat-rule price for one option; guarded expected-profit pricing falls back to this quote."""
+    mult = flat_mult(request, level, params, s)
+    later = 1.0 if option["kind"] == "same_day" else params.later_mult
+    return int(option["listPriceCents"] * mult * later + 0.5)
 
 
 def flat_mult(request: PriceRequest, level: int, params: Params, s: Situation) -> float:
@@ -95,10 +116,7 @@ def best_price(request: PriceRequest, option: DeliveryOption, params: Params, s:
     win0 = (p.win_const + p.win_trust * min(s.trust, TRUST_CAP) / TRUST_CAP + p.win_monday * s.monday
             + p.win_dense * (s.near is not None and s.near >= 40) + p.win_km100 * s.km / 100
             + p.win_big * (s.dealer_requests >= 20))
-    late = logistic(p.late_const + p.late_slack24 * slack(request, option, s) / DAY + p.late_km100 * s.km / 100
-                    + p.late_private * private(request) + p.late_near_pu * math.log1p(s.near or 0) / 4
-                    + p.late_near_de * math.log1p(s.near_delivery or 0) / 4 + p.late_backlog10 * s.backlog / 10
-                    + p.late_hour * ((request["arrivedAt"] % DAY) >= 15 * HOUR))
+    late = late_probability(request, option, params, s)
     listed = option["listPriceCents"]
     fee = request["referenceFeeCents"] * (p.opt_fee + p.opt_backlog * s.backlog)
     lost_trust = late * p.opt_late_trust * min(s.trust, TRUST_CAP) / TRUST_CAP * listed
@@ -109,6 +127,15 @@ def best_price(request: PriceRequest, option: DeliveryOption, params: Params, s:
         if value > best_value:
             best, best_value = m, value
     return None if best is None else int(best * listed + 0.5)
+
+
+def late_probability(request: PriceRequest, option: DeliveryOption, params: Params, s: Situation) -> float:
+    """Fitted lateness estimate used by expected-profit pricing and its reliability guard."""
+    p = params
+    return logistic(p.late_const + p.late_slack24 * slack(request, option, s) / DAY + p.late_km100 * s.km / 100
+                    + p.late_private * private(request) + p.late_near_pu * math.log1p(s.near or 0) / 4
+                    + p.late_near_de * math.log1p(s.near_delivery or 0) / 4 + p.late_backlog10 * s.backlog / 10
+                    + p.late_hour * ((request["arrivedAt"] % DAY) >= 15 * HOUR))
 
 
 def slack(request: PriceRequest, option: DeliveryOption, s: Situation) -> int:

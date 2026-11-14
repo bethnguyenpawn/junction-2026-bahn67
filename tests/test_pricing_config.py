@@ -118,8 +118,39 @@ class Config(unittest.TestCase):
             from_overrides(["nope=1"])
 
     def test_presets_exist(self):
-        self.assertEqual(set(config.PRESETS), {"starter", "l1", "l8", "l8_v2", "l8_v1"})
+        self.assertEqual(set(config.PRESETS), {"starter", "l1", "l8", "l8_guarded", "l8_flat", "l8_v2", "l8_v1"})
         self.assertIs(PRESETS["starter"], DEFAULT)
+
+    def test_l8_guarded_keeps_reliability_filters_and_capacity_penalty(self):
+        p = PRESETS["l8_guarded"]
+        self.assertEqual((p.opt, p.opt_backlog), (1, 0.04))
+        self.assertEqual((p.decline_km, p.min_slack_h), (550, 8))
+        self.assertEqual((p.open_mult, p.raise_every_min), (0.8, 30))
+        self.assertEqual((p.opt_guard_late, p.opt_guard_backlog, p.opt_delta_cap), (0.08, 3, 0.06))
+        self.assertIs(PRESETS["l8"], p)
+
+    def test_l8_guarded_falls_back_to_flat_price_on_high_late_risk_or_backlog(self):
+        request_with_stops = request([SAME])
+        request_with_stops["arrivedAt"] = NOON
+        request_with_stops["legs"] = [{"pickup": {"privateAddress": False},
+                                       "delivery": {"privateAddress": False}}]
+        p = PRESETS["l8_guarded"]
+        flat = quote(request_with_stops, 8, PRESETS["l8_flat"], near=0)
+        high_risk = quote(request_with_stops, 8, p, near=0)
+        high_backlog = quote(request_with_stops, 8, p, km=30, near=80, near_delivery=80, backlog=3)
+        self.assertEqual(high_risk, flat)
+        self.assertEqual(high_backlog, quote(request_with_stops, 8, PRESETS["l8_flat"], backlog=3,
+                                             near=80, km=30, near_delivery=80))
+
+    def test_l8_guarded_caps_low_risk_price_change(self):
+        request_with_stops = request([SAME])
+        request_with_stops["arrivedAt"] = NOON
+        request_with_stops["legs"] = [{"pickup": {"privateAddress": False},
+                                       "delivery": {"privateAddress": False}}]
+        p = PRESETS["l8_guarded"]
+        guarded = quote(request_with_stops, 8, p, km=30, near=80, near_delivery=80)
+        flat = quote(request_with_stops, 8, PRESETS["l8_flat"], km=30, near=80, near_delivery=80)
+        self.assertLessEqual(abs(guarded["same_day"] - flat["same_day"]), int(SAME[2] * p.opt_delta_cap + 0.5))
 
 
 if __name__ == "__main__":

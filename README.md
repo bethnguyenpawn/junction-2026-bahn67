@@ -8,13 +8,14 @@ it quotes prices to car dealers, wins orders, and hires freelance drivers to mov
 
 More: [PROGRESS.md](PROGRESS.md) (status, next steps, deadlines) · [LESSONS.md](LESSONS.md) (every experiment, including what failed) · [docs/CHALLENGE_SUMMARY.md](docs/CHALLENGE_SUMMARY.md) (the challenge in plain words).
 
-## 📊 Status (Sat 14 Nov, 11:30)
+## 📊 Status (Sat 14 Nov, 12:15)
 
-| Level 8 | Margin per week | Notes |
+| Level 8 strategy | Margin per week | Evidence |
 |---|---|---|
 | Official starter | −€60,442 | never ranked (46% late) |
-| **`--preset l8`** (current) | **+€10,265** | 30 test weeks, all ranked, worst week 92.6% on time. Use this for ranking runs and the final. |
-| Practice round "Saturday 09:00" (`l8`) | €9,400 (€47,002 / 5 weeks) | **rank 28 of 36** finished, 97.3% on time |
+| `l8_flat` (previous) | +€10,265 | 30 historical weeks, all ranked, worst week 92.6% on time |
+| **`--preset l8`** (current, guarded) | **+€9,581** | 20 matched weeks vs `l8_flat`; +€105/week, 20/20 ranked, worst week 94.6%. Fresh `l8z` holdout gained €1,175 over 10 weeks. Use for ranking runs and the final. |
+| Practice round "Saturday 09:00" (`l8_flat`) | €9,400 (€47,002 / 5 weeks) | **rank 28 of 36** finished, 97.3% on time |
 | 10th place / House best / 1st in that round | €13,744 / €10,132 / €15,515 | **top 10 needs ≈ +€4,500/week** |
 
 What we have measured:
@@ -22,7 +23,7 @@ What we have measured:
 - **Drivers:** we use 100–150 of the 650–950 drivers a week; fees are ~60% of revenue. Our fee schedule is already at its optimum as one level for all cars.
 - **Volume:** on the same weeks the top teams win 1.4–2× more orders at the same margin per order and on-time share.
 - **Dealer trust:** at the same price we win 36% of a dealer's requests at trust 0–4 and 82% at trust 25. One dealer sends 1/3 of all requests, and each late order halves its trust.
-- **Expected-profit pricing** (fitted win and lateness models, `--set opt=1`): +€6–8k per 10 weeks, but not yet safe (a week under 90%). Most promising lead.
+- **Expected-profit pricing:** unguarded settings failed on fresh matched runs (88.6% and 89.5% worst weeks). The guarded version raises expected margin by €2,091 over 20 matched weeks, with all weeks ranked and 94.6% worst on time.
 - **Mondays:** we win almost nothing (the competitor starts each week cheap).
 - **No gain** (code kept, off): dealer-trust pricing, flat fees, fee level per car, direct offers, two-car gigs, win-rate steering, price by our cost.
 - **Restart works:** rebuilding mid-week from the server gives the same result; the final loop skips a failing event instead of stopping.
@@ -61,7 +62,7 @@ We use the official `spread` Python kit. It sends HTTPS + JSON to `https://sprea
 
 ### How our level-8 system decides
 
-1. **Price:** quote 1.45× the list price (the competitor is 26–54% above list), +0.03× for each won order that still has no driver (a brake when we are overloaded). 0.2× cheaper where ≥ 40 drivers live within 30 km of the pickup (cars there are easy to move), 0.2× dearer for private addresses (often late).
+1. **Price:** use fitted expected-profit prices only when predicted lateness is ≤ 8% and driverless backlog is below 3. Keep each price within 6% of the prior flat `l8` quote; otherwise fall back to that quote (1.45× list, +0.03× per driverless order, −0.2× in dense pickup areas, +0.2× for private addresses).
 2. **Decline** (quote 10× list: never wins, costs nothing): trips over 550 km, and requests whose delivery options leave < 8 h to find a driver.
 3. **Driver fee:** opens at 0.8× the typical fee, +0.1× every 30 min up to 1.3×. After the deadline warning: 1.5×, rising to 2.5×.
 
@@ -77,7 +78,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt     # installs the official Spread kit (+ numpy for analysis)
 cp .env.example .env                # then put the team key in .env (never commit it)
-python -m unittest discover -s tests   # check: 17 tests OK, no key needed
+python -m unittest discover -s tests   # check: 20 tests OK, no key needed
 ```
 
 **The team key:** ask a teammate for the `bahn67` key; don't create a new team at `/join` (that gives a different team). A wrong or placeholder key fails with "The server does not accept this key (HTTP 401)".
@@ -96,8 +97,8 @@ python main.py --final --preset l8                               # play the fina
 python -m unittest discover -s tests                             # offline tests (no key needed)
 ```
 
-- **Presets** (`config.PRESETS`): `starter` (default, identical to the official starter), `l1`, `l8` (current), `l8_v2` and `l8_v1` (previous). `--set name=value` overrides any `Params` field.
-- **Seed sets:** tune on `l8`, confirm on `l8x`, use `l8y` only as a final check.
+- **Presets** (`config.PRESETS`): `starter` (default, identical to the official starter), `l1`, `l8` (current guarded strategy), `l8_guarded` (alias), `l8_flat` (previous l8), `l8_v2` and `l8_v1` (older). `--set name=value` overrides any `Params` field.
+- **Seed sets:** historical tuning used `l8`, `l8x`, and `l8y`; the guarded strategy passed a matched fresh holdout on `l8z`.
 - Every `evaluate.py` run appends its settings and scores to `results/log.jsonl`.
 
 ### Project structure
