@@ -58,14 +58,13 @@ PRESETS = {
     "starter": DEFAULT,
     # Level 1: fee ladder by reprice. +€34,186 on l1-a..j (starter -€28,978), worst week 91.1%.
     "l1": Params(open_mult=0.7, ladder_per_hour=0.3, ladder_cap=1.5),
-    # Level 8 (the final): price 1.45x list + 0.03 per driverless order, decline >550 km, only options with >=8 h slack,
-    # fee opens 0.8x and rises 0.1x every 30 min. 30 weeks (l8, l8x, l8y): +€297,267 (€9,909/week), 30/30 ranked,
-    # worst week 91.0%. l8y was never used for tuning: +€111,705 there vs +€98,442 for l8_v1.
-    "l8": Params(quote_mult=1.45, backlog_k=0.03, decline_km=550, min_slack_h=8, open_mult=0.8, raise_every_min=30),
-    # Candidate (Sat morning): l8 + 0.2 cheaper where >= 40 drivers live near the pickup, +0.2 on private addresses,
-    # quote 1.4, decline > 600 km. l8 €99,847, l8x €101,017 (+8% over l8), worst week 92.3%. Not yet checked on l8y.
-    "l8b": Params(quote_mult=1.4, backlog_k=0.03, decline_km=600, min_slack_h=8, open_mult=0.8, raise_every_min=30,
-                  dense_n=40, dense_cut=0.2, private_add=0.2),
+    # Level 8 (the final): price 1.45x list + 0.03 per driverless order, 0.2 cheaper where >= 40 drivers live within
+    # 30 km of the pickup, 0.2 dearer for private addresses; decline > 550 km; only options with >= 8 h slack;
+    # fee opens 0.8x, +0.1x every 30 min. 30 weeks (l8 €95,102, l8x €99,994, l8y €112,847): €307,943, worst week 92.6%.
+    "l8": Params(quote_mult=1.45, backlog_k=0.03, decline_km=550, min_slack_h=8, open_mult=0.8, raise_every_min=30,
+                 dense_n=40, dense_cut=0.2, private_add=0.2),
+    # Previous l8 (Sat night): same without the driver-density and private-address rules. €297,267, worst 91.0%.
+    "l8_v2": Params(quote_mult=1.45, backlog_k=0.03, decline_km=550, min_slack_h=8, open_mult=0.8, raise_every_min=30),
     # Previous level-8 preset (practice round "Saturday 00:00": €46,496, rank 43/62): +€79,155 / +€82,446.
     "l8_v1": Params(quote_mult=1.6, backlog_k=0.01, decline_km=500, min_slack_h=8, open_mult=0.8),
 }

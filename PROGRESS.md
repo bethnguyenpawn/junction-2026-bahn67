@@ -2,20 +2,17 @@
 
 Experiment details: [LESSONS.md](LESSONS.md) · Challenge in plain words: [docs/CHALLENGE_SUMMARY.md](docs/CHALLENGE_SUMMARY.md)
 
-## Morning summary (Sat 14 Nov, overnight tuning)
+## Summary (Sat 14 Nov, late morning)
 
-**New `--preset l8`** (the old one is kept as `l8_v1`):
+**Current `--preset l8`** (use it for ranking runs and the final):
 
-| | 30 test weeks (`l8`, `l8x`, `l8y`) | Per week | Worst week |
+| Level 8 | 30 test weeks (`l8`, `l8x`, `l8y`) | Per week | Worst week |
 |---|---|---|---|
-| `l8_v1` (round "Saturday 00:00": €46,496, final rank 43 of 62) | €260,043 | €8,668 | 92.0% |
-| **`l8` (new)** | **€297,267** | **€9,909 (+14%)** | 91.0%, 30/30 ranked |
+| `l8_v1` (round "Saturday 00:00": €46,496, rank 43 of 62) | €260,043 | €8,668 | 92.0% |
+| `l8_v2` (Sat night) | €297,267 | €9,909 | 91.0% |
+| **`l8` (now)** | **€307,943** | **€10,265** | **92.6%**, 30/30 ranked |
 
-On the 10 fresh weeks `l8y` (never used for tuning): €111,705 vs €98,442 (+13%).
-If the ranking weeks scale the same way, €46,496 → ≈ €53,000 (10th place in that round ended at €75,475).
-
-**To check after 09:00 (new ranking round):** run 5×
-`.venv/bin/python main.py --board --level 8 --preset l8`
+To play a ranking round: run 5× `.venv/bin/python main.py --board --level 8 --preset l8`.
 
 ## Saturday morning (structural ideas, details in LESSONS.md Exp. 17–21)
 
@@ -28,11 +25,11 @@ Findings:
 - Worked: 0.2 cheaper where ≥ 40 drivers live within 30 km of the pickup; +0.2 on private addresses (11% late, €8/order).
 - Did not work: direct offers to drivers near the delivery town (almost all unread or declined), a different fee cap.
 
-**Candidate `--preset l8b`:** l8 €99,847 + l8x €101,017 = €200,864 vs €185,562 for `l8` (+8%), worst week 92.3%. Check on `l8y` before making it the default.
+**Result:** the two rules that worked are now in `--preset l8` (+3.6% over 30 weeks, worst week 92.6%). The candidate `l8b` (also cheaper base price and longer trips) had an unranked week on `l8y` and was dropped.
 
-## The level-8 system (six rules)
+## The level-8 system (`--preset l8`)
 
-1. **Quote 1.45× the list price** (competitor is 26–54% above list).
+1. **Quote 1.45× the list price** (competitor is 26–54% above list); **0.2× less** where ≥ 40 drivers live within 30 km of the pickup, **0.2× more** for private addresses.
 2. **+0.03× per won order still without a driver** (backlog brake: take fewer cars when overloaded).
 3. **Decline trips > 550 km** (quote 10× list: never wins, costs nothing).
 4. **Only offer delivery options with ≥ 8 h slack** (deadline − drive − now); otherwise decline.
@@ -48,7 +45,7 @@ Tried and rejected overnight (see LESSONS.md): dealer-trust pricing (−€12k),
 | `main.py` | Runs a world: practice advance loop, final live-stream loop (`--final`). |
 | `dispatch.py` | `Desk`: answers events (post, reprice, withdraw, retry); fee schedules; level-1 ladder. |
 | `pricing.py` | `quote()`: the pricing rules above (levels 4+), plus drivers-near-pickup and private-address adjustments. Levels 1–3: list price; no quote = declined. |
-| `config.py` | `Params` (every tunable number) and `PRESETS` (`starter`, `l1`, `l8`, `l8b`, `l8_v1`). Default = kit starter exactly. |
+| `config.py` | `Params` (every tunable number) and `PRESETS` (`starter`, `l1`, `l8`, `l8_v2`, `l8_v1`). Default = kit starter exactly. |
 | `evaluate.py` | Benchmark over fixed seeds (≤ 6 worlds at once) → `results/log.jsonl`. |
 | `analysis/` | `fees.py` (money, booking delays), `orders.py` (late%/margin by distance, option, day, town), `market.py` (win rate by price, drivers near pickup). |
 | `tests/` | Offline unit tests (pricing rules, fee schedules, config): `python -m unittest discover -s tests`. |
@@ -63,7 +60,6 @@ python main.py --final --preset l8                            # the final (live 
 
 ## Next (in priority order)
 
-0. **Check `l8b` on `l8y`**; if ≥ 91% worst week and more margin, make it `l8`.
 1. **Test `--final --preset l8` in a test final (Sat 14:00 or 20:00).** The live loop has never run; check it keeps up and survives a restart.
 2. **Cheaper drivers** (fees are ~60% of revenue; we use ~15% of the drivers): multi-car gigs (return trips, two cars from one yard), offers to drivers who just finished our gigs nearby.
 3. **Dealer trust as extra wins, not higher prices** (raising prices failed): e.g. lower the backlog brake for trusted dealers.

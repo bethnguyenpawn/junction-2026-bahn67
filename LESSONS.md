@@ -311,8 +311,15 @@ Booked step: 922 at the opening fee, 460 at the cap, the rest between (10 weeks)
 | (nothing else) | €95,102 | 95.7% | | |
 | decline > 600 km | €99,178 | 93.0% | | |
 | decline > 700 km | €100,357 | 93.9% | €103,280 | **88.9%** ✗ |
-| **decline > 600, quote 1.4 → `--preset l8b`** | **€99,847** | **94.7%** | **€101,017** | **92.3%** ✓ |
+| decline > 600, quote 1.4 (`l8b`, see Exp. 22) | **€99,847** | **94.7%** | **€101,017** | **92.3%** ✓ |
 | decline > 600, backlog 0.02 | €101,369 | 93.8% | €102,815 | **89.3%** ✗ |
 
-**Candidate `l8b`:** €200,864 over l8 + l8x vs €185,562 for `l8` (+8%, +€765/week), worst week 92.3%.
-Not yet checked on `l8y`: do that before making it the default.
+## Experiment 22: final check on `l8y` → new `--preset l8`
+
+| Preset | l8 | l8x | l8y | 30 weeks | Worst week |
+|---|---|---|---|---|---|
+| old `l8` (now `l8_v2`) | €89,964 | €95,598 | €111,705 | €297,267 | 91.0% |
+| `l8b` (dense, private, q1.4, decline 600) | €99,847 | €101,017 | €111,010 | €311,874 | **89.9%** ✗ (l8y-a unranked) |
+| **dense −0.2 + private +0.2 → new `l8`** | **€95,102** | **€99,994** | **€112,847** | **€307,943 (+3.6%)** | **92.6%** ✓ |
+
+- **Lesson:** the two new rules add margin *and* safety; the extra relaxations (cheaper base price, longer trips) that looked good on 20 weeks failed on fresh weeks. `l8b` removed from the presets.

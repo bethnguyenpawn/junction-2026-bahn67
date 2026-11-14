@@ -104,7 +104,7 @@ class Config(unittest.TestCase):
             from_overrides(["nope=1"])
 
     def test_presets_exist(self):
-        self.assertEqual(set(config.PRESETS), {"starter", "l1", "l8", "l8b", "l8_v1"})
+        self.assertEqual(set(config.PRESETS), {"starter", "l1", "l8", "l8_v2", "l8_v1"})
         self.assertIs(PRESETS["starter"], DEFAULT)
 
 

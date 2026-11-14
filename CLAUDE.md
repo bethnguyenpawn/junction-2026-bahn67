@@ -46,9 +46,9 @@ Scripts load `.env` themselves (`main.load_env`). Use `.venv/bin/python`, not sy
 ## Current best
 
 Presets in `config.PRESETS`, use `--preset NAME` with main.py / evaluate.py:
-- `l8` (the final's level): quote 1.45× list + 0.03 per driverless order, decline > 550 km, options with ≥ 8 h slack, fee 0.8× +0.1× every 30 min. **€297,267 over 30 weeks (l8 €89,964, l8x €95,598, l8y €111,705), 30/30 ranked, worst 91.0%.**
-- `l8b` (candidate): `l8` + 0.2 cheaper at ≥ 40 drivers near the pickup, +0.2 private addresses, quote 1.4, decline > 600 km. l8 €99,847, l8x €101,017 (+8% over `l8`), worst 92.3%. **Not yet checked on l8y.**
-- `l8_v1`: the previous level-8 preset (q1.6, bk0.01, decline 500, raise hourly): €260,043 on the same 30 weeks.
+- `l8` (the final's level): quote 1.45× list + 0.03 per driverless order, −0.2 at ≥ 40 drivers near the pickup, +0.2 private addresses, decline > 550 km, options with ≥ 8 h slack, fee 0.8× +0.1× every 30 min. **€307,943 over 30 weeks (l8 €95,102, l8x €99,994, l8y €112,847), 30/30 ranked, worst 92.6%.**
+- `l8_v2`: previous `l8` without the density/private rules: €297,267, worst 91.0%. `l8_v1`: Sat-00:00 ranking preset: €260,043.
+- Tried and failed the l8y check: `l8b` (+ quote 1.4, decline > 600): €311,874 but a 89.9% week. Cheaper base price / longer trips keep failing on fresh weeks.
 - Practice ranking L8, round "Saturday 00:00" (with `l8_v1`): `bahn67` final rank 43/62, €46,496 (10th €75,475, House best €71,790). Top 10 needs ≈ +€6,000/week. Driver fees (~60% of revenue) are the main lever; we use only ~15% of the drivers.
 - `l1`: fee ladder 0.7× +0.3×/h cap 1.5× → +€34,186 on l1-a..j (starter −€28,978).
 - `starter`: the default; reproduces the kit starter exactly.
