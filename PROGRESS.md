@@ -2,7 +2,7 @@
 
 Status, what we learned, and what's next. Every experiment with its numbers: [LESSONS.md](LESSONS.md) · Challenge in plain words: [docs/CHALLENGE_SUMMARY.md](docs/CHALLENGE_SUMMARY.md)
 
-## Status (Sat 14 Nov, 22:45)
+## Status (Sat 14 Nov, 23:20)
 
 **Use `--preset l8_charge`** (`l8_notes` + charging stops only where the rules need them, Exp. 55) for ranking runs and the final. Fallback: `l8_notes`.
 
@@ -15,7 +15,7 @@ Status, what we learned, and what's next. Every experiment with its numbers: [LE
 | `l8_plan2` (+ price 1.40, links ≤ 50 km) | 30 weeks: `l8` €112,459, `l8x` €119,506, `l8y` €138,040 | €12,334 | 91.9%, 30/30 ranked |
 | `l8_chain` (+ chains of 3, plan every hour) | 30 weeks: `l8` €119,744, `l8x` €132,510, `l8y` €142,551 | €13,160 (+6.7%) | 90.3% (l8y-a), 30/30 ranked |
 | `l8_notes` (+ reads the dealers' notes; Exp. 52 slack fix) | 30 weeks: `l8` €125,036, `l8x` €135,759, `l8y` €149,830 | €13,688 (+4.0%) | 93.8%, 30/30 ranked |
-| **`l8_charge`** (+ charging stop only on routes > 200 km) | 30 weeks: `l8` €128,446, `l8x` €137,900, `l8y` €150,673 | **€13,901 (+1.6%)** | **92.9%**, 30/30 ranked |
+| **`l8_charge`** (+ charging stop only on routes > 200 km, cancellation fix) | 30 weeks: `l8` €128,702, `l8x` €139,629, `l8y` €150,912 | **€13,975 (+2.1%)** | **92.9%**, 30/30 ranked |
 
 | Practice ranking round | Preset | Us | Rank | 10th / 1st |
 |---|---|---|---|---|
@@ -40,7 +40,8 @@ Ranking round: one person runs `for i in 1 2 3 4 5; do caffeinate -i .venv/bin/p
 5. **Driver fee:** opens at 0.8× the typical fee, +0.1× every 30 min up to 1.3×; after `deadline_close` 1.5× rising to 2.5×.
 6. **Notes** (`notes.py`): reads each dealer note (Finnish, Swedish, English, with typos and corrections) into ready time, deadline, the sites' real hours, plates and manual gearbox; right on all 5,790 noted cars of our cached weeks. The pickup goes in the site's real hours from the ready time, the delivery by the earlier deadline, with transfer plates and a manual-licence audience when needed. Failed visits 8.7 → 0.3 a week, late orders 14.3 → 11.3.
 7. **Charging:** an electric car under 30% gets a charging stop only on a route over 200 km (RULES); the starter added one to every such car, so 11 short-route cars a week paid for a stop and could not join chains (Exp. 55).
-8. **Recovery:** after a crash or server restart, the bot rebuilds its state from the world (tested: same result as without the restart); held cars are posted at once.
+8. **Cancellations:** when a dealer cancels a car of an unbooked chain, the world withdraws the gig; we post its other cars again (RULES; before, they were never delivered; Exp. 60).
+9. **Recovery:** after a crash or server restart, the bot rebuilds its state from the world (tested: same result as without the restart); held cars are posted at once.
 
 ## What we learned
 
@@ -52,7 +53,7 @@ Ranking round: one person runs `for i in 1 2 3 4 5; do caffeinate -i .venv/bin/p
 - **Dealer trust drives volume:** at the same price we win 36% of a dealer's requests at trust 0–4 and 82% at trust 25. One dealer sends 1/3 of all requests; each late order halves its trust.
 - **Lanes:** the competitor's price depends on where the car goes, the same in every world (HANDBOOK). Fitted from 19,450 random-price quotes: −0.17× list for Vantaa up to +0.18× for Joensuu/Ylivieska (`lanes.json`, `analysis/lanes.py`). Using it: +4.1% over 30 weeks.
 - **Expected-profit pricing** (`opt`, fitted win and lateness models): with a full lateness penalty and trade-ins declined it is safe (worst 91.4%), but only +€2.4k over 20 weeks vs `l8`: not worth switching (Exp. 29). Pricing low to build dealer trust loses money (Exp. 29). Learning the week's price level from wins/losses: +1.3% but a fresh week at 90.6% (Exp. 31). Return-trip offers to drivers who just delivered for us: 1–3 of 41–104 accepted (Exp. 33). Outage pricing: detected reliably, but a higher price there loses orders and trust (Exp. 34). Price-war day: detected, cutting our price is neutral (Exp. 35). Guarded expected-profit pricing (`l8_guarded`, only low-risk requests, ±6% around `l8`): +€2.0k on tuning weeks but −€3.7k on 20 fresh weeks (Exp. 38); fresh lateness clusters on 300–499 km trips and `next_day` options.
-- **Driver cost per car** (Sat 23:00): a car alone costs €71 (1.07× typical), in a 2-chain €49, in a 3-chain €35. Lone cars are 54% of fees; that is where the top teams' margin must come from. Longer links (80/120 km), private cars in chains, cheaper trade-ins: noise or worse (Exp. 53–56).
+- **Driver cost per car** (Sat 23:00): a car alone costs €71 (1.07× typical), in a 2-chain €49, in a 3-chain €35. Lone cars are 54% of fees; that is where the top teams' margin must come from. Longer links (80/120 km), private cars in chains, cheaper trade-ins, a 2 h chain margin, slower raises for cars with time, cheaper 3-car chains: noise (l8 and l8x move ±€3–5k in opposite directions); cheaper later options −€7.3k (Exp. 53–59). Only fixes that follow the rules held on every set (notes, charging, cancellations).
 - **Notes matter** (Exp. 49): the world acts on every note; the starter's reader missed all plates and manual cars and many ready times and deadlines. Reading them well: +3.8% over 30 weeks and the worst week 90.3% → 93.8%. The reveal holds each won order's true note facts, so a reader can be scored offline.
 - **Saturday night (Exp. 47–51), not adopted:** fees by where drivers live (`home_fee`), a brake that counts only urgent cars, no fee raises at night, cheaper price with the note reader, explicit chain windows: neutral or worse. Snow-touched orders are late 9.8% vs 3.3% (~1.8 extra late a week; forecasts come 24 h ahead).
 - **Saturday evening (Exp. 44–46), all on `l8_chain`, none adopted:** the competitor's level is learnable (week ±0.08×, day ±0.12–0.26×, Monday −0.21×; log loss 0.552 → 0.439) but following it is neutral; cheaper base price, long trips, chain-aware discounts, a narrower backlog brake and cheaper shared gigs all win more orders at a lower margin; 4-car chains, private addresses and charging cars in chains, and other split times are neutral or worse; offering the next car to a driver who just booked: 1 of 84 accepted. Differences under ~€3k on 10 weeks are noise.
@@ -82,7 +83,7 @@ Still 42% of cars travel alone (140/week at €68 vs €42 shared): held > 24 h 
 2. **Late orders left** (11.3/week): booked in time but late 3.3, driver drops 2.9, order changes 2.6, booked only after the deadline warning 1.9. Snow: post and price snow-touched orders earlier/higher.
 3. **Final Sun 09:00** with `l8_charge`. Freeze the code Saturday night.
 
-**Estimated margin:** `l8_charge` ≈ €13,901/week on our 30 test weeks (+1.6% over `l8_notes`, +5.6% over `l8_chain`).
+**Estimated margin:** `l8_charge` ≈ €13,975/week on our 30 test weeks (+2.1% over `l8_notes`, +6.2% over `l8_chain`).
 
 **Ranking runs:** one person, five in a row: `for i in 1 2 3 4 5; do caffeinate -i .venv/bin/python main.py --board --level 8 --preset l8_charge || break; done`.
 

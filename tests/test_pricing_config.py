@@ -225,6 +225,35 @@ class PairChange(unittest.TestCase):
         self.assertEqual(posted, ["A", "B"])
 
 
+class Cancel(unittest.TestCase):
+    """RULES: when a cancelled order's gig is withdrawn, post its other cars again."""
+
+    order = PairChange.order
+
+    def test_withdrawn_gig_reposts_the_other_car(self):
+        desk = Desk(None, 8, 10 * HOUR, PRESETS["l8_plan"])
+        for oid in ("A", "B"):
+            desk.orders[oid] = self.order(oid)
+            desk.requests[oid] = {"referenceFeeCents": 5000, "note": None, "legs": [{}]}
+        stops = [{"orderId": oid, "leg": 0, "kind": kind} for oid in ("A", "B") for kind in ("pickup", "delivery")]
+        desk.carry({"type": "post", "stops": stops, "audience": {}, "schedule": []}, "g1")
+        desk.handle({"kind": "order_cancelled", "orderId": "A", "gigs": [{"gigId": "g1", "outcome": "withdrawn"}]})
+        posted = [a["stops"][0]["orderId"] for a in desk.outbox if a["type"] == "post"]
+        self.assertEqual(posted, ["B"])
+        self.assertNotIn("A", desk.orders)
+
+    def test_shortened_gig_keeps_the_other_car(self):
+        desk = Desk(None, 8, 10 * HOUR, PRESETS["l8_plan"])
+        for oid in ("A", "B"):
+            desk.orders[oid] = self.order(oid)
+            desk.requests[oid] = {"referenceFeeCents": 5000, "note": None, "legs": [{}]}
+        stops = [{"orderId": oid, "leg": 0, "kind": kind} for oid in ("A", "B") for kind in ("pickup", "delivery")]
+        desk.carry({"type": "post", "stops": stops, "audience": {}, "schedule": []}, "g1")
+        desk.handle({"kind": "order_cancelled", "orderId": "A", "gigs": [{"gigId": "g1", "outcome": "shortened"}]})
+        self.assertEqual([a for a in desk.outbox if a["type"] == "post"], [])
+        self.assertEqual(desk.gigs_of("B"), ["g1"])
+
+
 class Charging(unittest.TestCase):
     """RULES: an electric car under 30% needs a charging stop only on a route over 200 km (Params.charge_km)."""
 

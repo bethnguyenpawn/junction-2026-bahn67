@@ -812,3 +812,29 @@ Lone cars are the lever: each one moved into a chain saves ~€20–35. Also: 25
 ## Experiment 56: private-address cars in chains, with the charging fix (`chain_private=1`) ✗
 
 - **Result:** l8 €126,276 vs €128,446 (−€2.2k), worst 94.0%. A private slot is too narrow for a chain. Off.
+
+## Why cars still go alone with `l8_charge` (one week, l8-a, every one-car post traced to its code path)
+
+Split chain (no booking within 2 h) 79, held without a partner until 24 h before the last pickup 75, private address at win 14, < 8 h to the last pickup at win 10, trade-in 6, order change 6, other 6. Split cars can be chained again later. Chains are booked 88% at 0–2 h of driving, 75–81% at 2–10 h, 47% at 10–12 h (19 gigs in 10 weeks); chains posted at 07:00 only 45% (5/week).
+
+## Experiment 57: slower raises for cars with time (`slow_every_min`, `slow_after_h=12`) ✗ / chain margin 2 h ✗
+
+- **Idea:** a car with ≥ 12 h to its last pickup needs no 0.8 → 1.3x climb in 2.5 h; raise every 60/90 min instead.
+- **Result:** 60 min: l8 €130,703 (+€2.3k), l8x €132,506 (−€5.4k); 90 min: l8 €126,779 (−€1.7k). Off.
+- `pair_margin_h=2` (with `charge_km=200`): l8 €128,316 (−€0.1k). Off.
+
+## Experiment 58: cheaper 3-car chains (`chain_fee_step=0.1`: 0.8x instead of 0.9x) ✗
+
+- **Why:** 62 of 80 cars a week in 3-car chains are booked within 5 minutes at 0.73x typical.
+- **Result:** l8 €131,841 (+€3.4k), l8x €133,947 (−€4.0k, worst 91.9%), l8y €151,381 (+€0.7k): +€0.15k over 30 weeks. Noise. Off.
+- **Fee per car by the option the dealer chose** (`l8_charge`): same_day 183 cars/week at 0.90x typical, next_day 147 at 0.92x, within_3_days 13 at 0.87x. Later options are not cheaper to move per typical fee.
+
+## Experiment 59: cheaper later options again (`later_mult=0.9`, with chains) ✗
+
+- **Idea:** with chains a later deadline should be cheaper to move, so steer dealers to it (Exp. 14 predates planning).
+- **Result:** l8 €121,106 (−€7.3k). Later options are not cheaper per typical fee (table in Exp. 58). Off.
+
+## Experiment 60: a cancellation reposts the other cars of its withdrawn gig (bug fix, always on)
+
+- **Bug:** RULES: when the dealer cancels an order whose gig was still open, the world withdraws the gig: "Post its other cars again." `handle` only forgot the cancelled order, so the other cars of a chain kept a dead gig and were never delivered (undelivered = full refund + penalty + halved trust). 0.1 times a week (3 cancellations a week: shortened 1.5, continues 0.5, released 0.5, withdrawn 0.1). Now `Desk.cancel` posts them again.
+- **Result** (`l8_charge`): l8 €128,702 (+€0.3k), l8x €139,629 (+€1.7k), l8y €150,912 (+€0.2k): **€419,243 over 30 weeks (+€2.2k), worst 92.9%**. These are now the `l8_charge` reference numbers.

@@ -97,6 +97,8 @@ class Params:
     raise_every_min: int = HOUR  # minutes between steps
     raise_steps: int = 6  # steps in the schedule, so the cap is open + (steps-1)*raise
     night_hold: int = 0  # Exp. 48 (worse): count raise_every_min only in reading hours (07-23)
+    slow_every_min: int = 0  # > 0: minutes between raises for a gig whose cars all have >= slow_after_h to last pickup
+    slow_after_h: float = 12.0
 
     # --- Notes (Exp. 49): 1 = notes.py reads ready time, deadline, closing time, plates and manual gearbox from the
     # dealer's note (right on all 5,790 noted cars of cached weeks); 0 = the starter's keyword matcher.

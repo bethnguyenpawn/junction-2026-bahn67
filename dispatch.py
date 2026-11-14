@@ -102,16 +102,15 @@ def wake_on(params: Params) -> list[str]:
 # --- fee schedules: the main decision at levels 1-2 -------------------------------------------
 
 
-def fee_schedule(now: int, fee: float, level: int, p: Params) -> list[FeeStep]:
-    """Normal schedule: open_mult x fee, then +raise_per_step x fee every raise_every_min. Level 1: one step.
-    With night_hold the minutes count only while drivers read (07-23), so a gig posted at night opens the day
+def fee_schedule(now: int, fee: float, level: int, p: Params, every: int = 0) -> list[FeeStep]:
+    """Normal schedule: open_mult x fee, then +raise_per_step x fee every raise_every_min (or `every`). Level 1: one
+    step. With night_hold the minutes count only while drivers read (07-23), so a gig posted at night opens the day
     at its first fee instead of a fee raised for nobody."""
     steps = 1 if level == 1 else p.raise_steps
+    every = every or p.raise_every_min
     return [
         {
-            "at": reading_minutes_after(now, k * p.raise_every_min)
-            if p.night_hold and k
-            else now + k * p.raise_every_min,
+            "at": reading_minutes_after(now, k * every) if p.night_hold and k else now + k * every,
             "feeCents": max(1, int(fee * (p.open_mult + k * p.raise_per_step) + 0.5)),
         }
         for k in range(steps)
@@ -351,8 +350,7 @@ class Desk:
         elif kind == "order_changed":
             self.change(event["order"])
         elif kind == "order_cancelled":
-            for books in (self.orders, self.leg_gigs, self.held):
-                books.pop(event["orderId"], None)
+            self.cancel(event["orderId"], event["gigs"])
         elif kind == "visit_failed":
             self.retry(event["orderId"], event["leg"], event["reason"])
         elif kind == "gig_expired":
@@ -877,6 +875,23 @@ class Desk:
             return None
         return link["minutes"]
 
+    def cancel(self, order_id: str, gigs: list) -> None:
+        """Forgets a cancelled order. A gig the world withdrew for it may carry other cars: RULES say to post them
+        again, else they keep no gig and are never delivered."""
+        for books in (self.orders, self.leg_gigs, self.held):
+            books.pop(order_id, None)
+        for gig in gigs:
+            action = self.posts.get(gig["gigId"])
+            if gig["outcome"] != "withdrawn" or action is None:
+                continue
+            for other in dict.fromkeys(stop["orderId"] for stop in action["stops"]):
+                legs = self.leg_gigs.get(other, {})
+                freed = [leg for leg, gig_id in legs.items() if gig_id == gig["gigId"]]
+                for leg in freed:
+                    legs.pop(leg)
+                if freed and other in self.orders:
+                    self.post(self.orders[other], freed)
+
     def change(self, order: Order) -> None:
         if order["id"] in self.orders:
             self.orders[order["id"]] = order
@@ -945,7 +960,17 @@ class Desk:
                     "feeCents": max(1, int(fee * self.ladder_mult(order_ids[0]) + 0.5)),
                 }
             ]
-        return fee_schedule(self.now, fee, self.level, self.p)
+        return fee_schedule(self.now, fee, self.level, self.p, self.raise_every(order_ids))
+
+    def raise_every(self, order_ids: list[str]) -> int:
+        """Minutes between raises: slow_every_min when every car still has slow_after_h hours until its last pickup
+        (no hurry, so drivers who wait for a raise wait long), else the usual raise_every_min (0)."""
+        p = self.p
+        if not p.slow_every_min:
+            return 0
+        horizon = self.now + p.slow_after_h * HOUR
+        orders = [self.orders.get(oid) for oid in order_ids]
+        return p.slow_every_min if all(o is not None and self.last_pickup(o) >= horizon for o in orders) else 0
 
     def home_factor(self, last: StopRef) -> float:
         """Fee factor for a gig that ends where many drivers live (Params.home_n): one of them nearly always takes
