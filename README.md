@@ -34,7 +34,7 @@ Open `.env` and replace `put-your-team-key-here` with the `bahn67` key; ask a te
 **3. Check it works**
 
 ```bash
-python -m unittest discover -s tests                 # 26 tests OK (no key needed)
+python -m unittest discover -s tests                 # 29 tests OK (no key needed)
 python main.py --level 8 --seed l8-a --preset l8     # plays one practice week, ~1 min
 ```
 
@@ -67,7 +67,7 @@ python main.py --world WORLD_ID --preset l8_plan2                        # conti
 | `config.py` | Every tunable number (`Params`) and the presets. |
 | `lanes.json` | How much dearer the competitor is per delivery town (fitted by `analysis/lanes.py`). |
 | `evaluate.py` | Benchmark: plays 10 fixed weeks in parallel and logs the score. |
-| `analysis/` | Scripts that study finished weeks: late orders, win rate by price, the fitted models. |
+| `analysis/` | Scripts that study finished weeks: late orders, win rate by price, car sharing (`sharing.py`), the fitted models. |
 | `tests/` | Offline unit tests. |
 | `docs/` | The official rules, handbook and API, plus our summary. |
 | `PROGRESS.md` / `LESSONS.md` | Status and next steps / every experiment with numbers. |
@@ -140,6 +140,8 @@ To decline, we quote 10× list: it never wins and costs nothing.
 ### Tested and off
 
 Every other `Params` field is a rule we tested that didn't help. They're kept so each test can be rerun; the experiment number is next to each field in `config.py`, and the numbers are in `LESSONS.md`. They include: dealer-trust pricing, Monday prices, learning the week's price level, win-rate steering, direct offers to drivers (also return trips, Exp. 33), two-car gigs posted as soon as cars are won (Exp. 24, replaced by planning), per-car fee levels, and price by cost.
+
+**In progress: chain dispatcher** (`--preset l8_chain`, Exp. 42). Every hour, held cars and posted gigs no driver has booked yet are chained, up to 3 cars per driver: +6.5% on the tuning weeks, being checked on the others.
 
 Also tested: reacting to the competitor's outage day (`outage_add`, Exp. 34) and price-war day (`war_cut`, Exp. 35). The bot detects both, but changing the price on those days doesn't pay.
 

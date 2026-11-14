@@ -61,11 +61,11 @@ Ranking round: one person runs `for i in 1 2 3 4 5; do .venv/bin/python main.py 
 
 ## Next (in priority order)
 
-**Biggest lever: driver cost per car** (Exp. 40). A car in a pair costs 0.76× its typical fee (€41.60), a car alone 1.06× (€68.06), and half our cars still go alone. Pairing 75% instead of 49% ≈ +€2,000/week; a cheaper price (1.40) is only ≈ +€180/week.
+**Biggest lever: driver cost per car.** A car sharing a driver costs ~0.77× its typical fee, a car alone ~1.06×.
 
-1. **More pairs, in code:** (a) pair a newly won car with a lone car that is posted but not booked yet (72 cars/week are held and find no partner, €1,181/week extra); (b) let an unbooked pair's fee rise instead of splitting it after 2 h (33 cars/week, €774/week extra); (c) chains of 3 cars.
-2. **Parameters on top of `l8_plan2`:** `pair_fee` 0.8, learning the week's price level (mixed, Exp. 39).
-3. **Fewer failed visits:** 12/week cost €415, 53% `not_ready` (driver came before the car was ready). Check the note's ready time against the driver's arrival.
+1. **Chain dispatcher** (Exp. 42, candidate `--preset l8_chain` = `l8_plan2` + `chain_max=3 plan_every_h=1`): +€7.3k on the `l8` weeks (€119,744, +6.5%), worst 94.1%, 58% of cars shared. Check on `l8x` and `l8y`; if every week ≥ 91%, it replaces `l8_plan2`.
+2. **More sharing:** private addresses in chains (`chain_private=1`, coded, untested); chains of 4; a lower fee for 3-car gigs. Re-planning unbooked chains loses money (Exp. 42).
+3. **Fewer failed visits:** 12/week cost €415, 53% `not_ready`. Check the note's ready time against the driver's arrival.
 4. **Test final Sat 20:00** and **final Sun 08:00** with the best preset that passed `l8`, `l8x` and `l8y`. Freeze the code Saturday night.
 
 **Estimated margin:** `l8_plan` ≈ €11,300/week on our test weeks and €14,282/week in the 12:00 ranking round (10th place: €17,886). With 75% of cars paired ≈ €16,300/week.

@@ -78,6 +78,10 @@ class Params:
     hold_h: float = 8.0  # hold an order only with >= this many hours until its latest pickup
     wait_h: float = 0.0  # an unpaired held car waits for the next plan only with >= this many hours spare (0 = hold_h)
     split_after_min: int = 0  # a two-car gig no driver booked within this many minutes goes back to one gig per car
+    chain_max: int = 0  # >= 2: plan chains of up to this many cars per driver, also from posted unbooked one-car gigs
+    # (Desk.plan_chains); 0 = pairs of held cars only (Desk.plan_pairs)
+    chain_replan: int = 0  # 1: a chain no driver booked within split_after_min goes back into the next plan (not split)
+    chain_private: int = 0  # 1: cars to or from a private address may join chains (their slot is respected)
     # (uses pair_fee, pair_km, pair_lead_min, pair_margin_h below)
 
     # --- Normal driver fee schedule, as multiples of the request's typical fee (referenceFeeCents).
@@ -205,6 +209,9 @@ PRESETS = {
 # CURRENT BEST: l8_plan + price 1.40x and pair links up to 50 km (Exp. 41). l8 €112,459, l8x €119,506
 # (+€5,802 over 20 weeks vs l8_plan), l8y €138,040; worst week 91.9%, 30/30 ranked.
 PRESETS["l8_plan2"] = replace(PRESETS["l8_plan"], quote_mult=1.40, pair_km=50)
+# CANDIDATE: l8_plan2 + chains of up to 3 cars from held cars and posted unbooked gigs, planned every hour (Exp. 42).
+# l8 €119,744 (+6.5%), worst week 94.1%. Not yet checked on l8x and l8y.
+PRESETS["l8_chain"] = replace(PRESETS["l8_plan2"], chain_max=3, plan_every_h=1)
 
 PRESETS["l8_guarded"] = replace(
     PRESETS["l8"], opt=1, opt_backlog=0.04, opt_guard_late=0.08, opt_guard_backlog=3, opt_delta_cap=0.06

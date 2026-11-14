@@ -373,6 +373,17 @@ class Desk:
         self.next_plan = next_plan_at(self.now, p.plan_every_h)
         stops_of = {oid: self.single_stops(oid) for oid in self.held if oid in self.orders}
         held = {oid: stops for oid, stops in stops_of.items() if stops is not None}
+        paired: set[str] = self.plan_chains(held) if p.chain_max >= 2 else self.plan_pairs(held)
+        for oid in list(self.held):
+            order = self.orders.get(oid)
+            if order is None:
+                self.held.pop(oid)
+            elif oid not in paired and order["lastPickupAt"] - self.next_plan < (p.wait_h or p.hold_h) * HOUR:
+                self.post(order, undelivered(order))
+
+    def plan_pairs(self, held: dict[str, list[StopRef]]) -> set[str]:
+        """Pairs held cars into two-car gigs, round trips first, then the shortest link. Returns the paired cars."""
+        p = self.p
         options = []
         for a, first in held.items():
             for b, second in held.items():
@@ -390,15 +401,161 @@ class Desk:
             if a not in paired and b not in paired:
                 paired |= {a, b}
                 self.post_pair(stops, (a, b))
-        for oid in list(self.held):
-            order = self.orders.get(oid)
-            if order is None:
-                self.held.pop(oid)
-            elif oid not in paired and order["lastPickupAt"] - self.next_plan < (p.wait_h or p.hold_h) * HOUR:
-                self.post(order, undelivered(order))
+        return paired
 
-    def post_pair(self, stops: list[StopRef], order_ids: tuple[str, str]) -> None:
-        """One gig for two one-car orders, at fees_for (pair_fee x both typical fees)."""
+    def plan_chains(self, held: dict[str, list[StopRef]]) -> set[str]:
+        """Chains of up to chain_max cars per driver from the held cars and the posted, unbooked one-car gigs.
+        A posted car joins a chain only after its gig is withdrawn (a driver may have booked it meanwhile).
+        Returns the held cars that went into a chain."""
+        lone = self.unbooked_lone_gigs()
+        stale = self.stale_chains() if self.p.chain_replan else {}
+        freed_chains = self.withdraw_now(list(dict.fromkeys(stale.values())))
+        for oid, gig_id in stale.items():
+            if gig_id in freed_chains:
+                self.leg_gigs.pop(oid, None)
+                stops = self.single_stops(oid)
+                if stops is None:  # can't join a chain any more: post it alone now
+                    self.post(self.orders[oid], undelivered(self.orders[oid]))
+                else:
+                    lone[oid] = (gig_id, stops)
+        cars = {**held, **{oid: stops for oid, (_, stops) in lone.items()}}
+        wanted = [lone[oid][0] for chain in self.build_chains(cars) if len(chain) > 1 for oid in chain if oid in lone]
+        freed = self.withdraw_now([g for g in dict.fromkeys(wanted) if g not in freed_chains]) | freed_chains
+        for oid, (gig_id, _) in lone.items():
+            if gig_id in freed:
+                self.leg_gigs.pop(oid, None)
+        pool = {oid: stops for oid, stops in cars.items() if oid in held or lone[oid][0] in freed}
+        chained: set[str] = set()
+        for chain in self.build_chains(pool):
+            if len(chain) > 1:
+                chained |= set(chain)
+                self.post_pair([stop for oid in chain for stop in pool[oid]], tuple(chain))
+            elif chain[0] not in held:  # withdrawn but its partner was booked meanwhile: post it alone again
+                self.post(self.orders[chain[0]], undelivered(self.orders[chain[0]]))
+        return chained & set(held)
+
+    def stale_chains(self) -> dict[str, str]:
+        """Order id -> gig of every multi-car gig no driver booked within split_after_min (chain_replan: its cars go
+        back into the plan instead of being split into one-car gigs)."""
+        stale = {}
+        for gig_id, action in self.posts.items():
+            if (
+                gig_id not in self.booked
+                and self.is_pair(gig_id)
+                and self.now - self.posted_at.get(gig_id, self.now) >= self.p.split_after_min
+                and self.is_live(gig_id)
+            ):
+                stale |= {stop["orderId"]: gig_id for stop in action["stops"] if stop["orderId"] in self.orders}
+        return stale
+
+    def unbooked_lone_gigs(self) -> dict[str, tuple[str, list[StopRef]]]:
+        """Posted one-car gigs no driver has booked, of plain cars that are not urgent: order id -> (gig, stops)."""
+        lone = {}
+        for gig_id, action in self.posts.items():
+            oid = action["stops"][0]["orderId"]
+            if (
+                gig_id not in self.booked
+                and len(action["stops"]) == 2
+                and oid not in self.urgent
+                and self.leg_gigs.get(oid, {}).get(0) == gig_id
+            ):
+                stops = self.single_stops(oid)
+                if stops is not None:
+                    lone[oid] = (gig_id, stops)
+        return lone
+
+    def build_chains(self, cars: dict[str, list[StopRef]]) -> list[list[str]]:
+        """Greedy chaining: repeatedly joins the two chains with the best link (a round trip home first, then the
+        shortest empty drive) while one driver can still do the whole chain on time (chain_fits)."""
+        p = self.p
+        place = {oid: (stops[0]["orderId"], self.orders[oid]["legs"][0]) for oid, stops in cars.items()}
+        links = {  # tail car -> [(link minutes, head car)] within pair_km
+            a: sorted(
+                (road["minutes"], b)
+                for b in cars
+                if b != a
+                and (road := self.roads.get((place[a][1]["delivery"]["placeId"], place[b][1]["pickup"]["placeId"])))
+                and road["km"] <= p.pair_km
+            )
+            for a in cars
+        }
+        chains = {oid: [oid] for oid in cars}  # head car -> chain
+        tail_of = {oid: oid for oid in cars}  # head car -> its tail car
+        while True:
+            best = None
+            for head, chain in chains.items():
+                for minutes, nxt in links[tail_of[head]]:
+                    if nxt not in chains or nxt == head or len(chain) + len(chains[nxt]) > p.chain_max:
+                        continue
+                    joined = chain + chains[nxt]
+                    if not self.chain_fits([cars[oid] for oid in joined]):
+                        continue
+                    home = self.km(place[joined[-1]][1]["delivery"]["placeId"], place[head][1]["pickup"]["placeId"])
+                    key = (home > p.pair_km, minutes)
+                    if best is None or key < best[0]:
+                        best = (key, head, nxt)
+            if best is None:
+                return list(chains.values())
+            _, head, nxt = best
+            chains[head] += chains.pop(nxt)
+            tail_of[head] = tail_of.pop(nxt)
+
+    def chain_fits(self, cars: list[list[StopRef]]) -> bool:
+        """One driver starting pair_lead_min from now delivers every car pair_margin_h before its deadline, within
+        12 h of work."""
+        margin = self.p.pair_margin_h * HOUR
+        t = start = None
+        previous = None
+        for stops in cars:
+            pickup, delivery, ready, due = self.span(stops)
+            pickup_to, delivery_from = self.slot_limits(stops)
+            drive = self.roads.get((pickup, delivery))
+            if drive is None:
+                return False
+            if previous is None:
+                t = start = max(self.now + self.p.pair_lead_min, ready)
+            else:
+                link = self.roads.get((previous, pickup))
+                if link is None:
+                    return False
+                t = max(t + link["minutes"], ready)
+            if t > pickup_to:
+                return False
+            t = max(t + drive["minutes"], delivery_from)
+            if t > due - margin or t - start > 12 * HOUR:
+                return False
+            previous = delivery
+        return True
+
+    def span(self, stops: list[StopRef]) -> tuple[str, str, int, int]:
+        """A one-car gig's pickup place, delivery place, earliest pickup and latest delivery."""
+        order = self.orders[stops[0]["orderId"]]
+        leg = order["legs"][0]
+        ready = stops[0].get("window", leg["pickup"]["window"])["from"]
+        due = min(order["deadline"], stops[1].get("window", {"to": order["deadline"]})["to"])
+        return leg["pickup"]["placeId"], leg["delivery"]["placeId"], ready, due
+
+    def slot_limits(self, stops: list[StopRef]) -> tuple[float, float]:
+        """The latest pickup and the earliest delivery a one-car gig allows (a private address's booked slot)."""
+        leg = self.orders[stops[0]["orderId"]]["legs"][0]
+        pickup_to = stops[0].get("window", leg["pickup"]["window"])["to"]
+        delivery_from = stops[1].get("window", leg["delivery"]["window"])["from"]
+        return pickup_to, delivery_from
+
+    def withdraw_now(self, gig_ids: list[str]) -> set[str]:
+        """Withdraws gigs at once and returns those withdrawn (a gig a driver booked meanwhile stays)."""
+        if not gig_ids:
+            return set()
+        self.send()
+        freed = set()
+        for i in range(0, len(gig_ids), 50):
+            batch = gig_ids[i : i + 50]
+            results = self.world.act([{"type": "withdraw", "gigId": gig_id} for gig_id in batch])
+            freed |= {gig_id for gig_id, result in zip(batch, results) if result["ok"] is True}
+        return freed
+
+    def post_pair(self, stops: list[StopRef], order_ids: tuple[str, ...]) -> None:
+        """One gig for several one-car orders, at fees_for (pair_fee x their typical fees)."""
         for oid in order_ids:
             self.held.pop(oid, None)
             self.first_posted.setdefault(oid, self.now)
@@ -468,7 +625,7 @@ class Desk:
         if order is None or len(order["legs"]) != 1 or undelivered(order) != [0]:
             return None
         leg = order["legs"][0]
-        if leg["pickup"]["privateAddress"] or leg["delivery"]["privateAddress"]:
+        if (leg["pickup"]["privateAddress"] or leg["delivery"]["privateAddress"]) and not self.p.chain_private:
             return None
         stops = without_windows(stops_for(order, [0], self.requests[order_id]["note"], Retry()), self.now)
         return None if stops[0].get("withCharging") else stops
@@ -477,18 +634,8 @@ class Desk:
         """Road minutes from the first car's delivery to the second car's pickup, when one driver starting
         pair_lead_min from now delivers both pair_margin_h before their deadlines within 12 h of driving."""
 
-        def span(stops):
-            order = self.orders[stops[0]["orderId"]]
-            leg = order["legs"][0]
-            ready = stops[0].get("window", leg["pickup"]["window"])["from"]
-            due = min(
-                order["deadline"],
-                stops[1].get("window", {"to": order["deadline"]})["to"],
-            )
-            return leg["pickup"]["placeId"], leg["delivery"]["placeId"], ready, due
-
-        p1, d1, ready1, due1 = span(first)
-        p2, d2, ready2, due2 = span(second)
+        p1, d1, ready1, due1 = self.span(first)
+        p2, d2, ready2, due2 = self.span(second)
         link = self.roads.get((d1, p2))
         drive1, drive2 = self.roads.get((p1, d1)), self.roads.get((p2, d2))
         if not (link and drive1 and drive2) or link["km"] > self.p.pair_km:
@@ -593,7 +740,7 @@ class Desk:
         """Runs the batch plan when due, and raises the fee of every unbooked, non-urgent gig to the ladder's target."""
         if self.p.plan_every_h and self.now >= self.next_plan:
             self.plan()
-        if self.p.split_after_min:
+        if self.p.split_after_min and not (self.p.chain_max >= 2 and self.p.chain_replan):
             self.split_stale_pairs()
         if self.p.ladder_per_hour <= 0:
             return

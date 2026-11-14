@@ -635,3 +635,22 @@ The 14:00 test final showed a cheap week: at ≥ 1.45× list we won 1% of quotes
 - **Driver cost:** a paired car costs 0.76× its typical fee, a car alone 1.10×. The worst week had the fewest pairs.
 - **Other costs €1,131/week:** late refunds €613 (17 cars), failed visits €415 (12; 53% `not_ready`, 26% `no_plates`), release fees, undelivered, waiting €102.
 - **Server restart:** run 2 stopped on HTTP 502. `main.py --world ID` now rebuilds a stopped world with `Desk.rejoin` and plays on (run 2 finished ranked, €14,757); the practice loop and `evaluate.py` now wait and rebuild by themselves after a restart or timeout.
+
+## Experiment 42: chain dispatcher (`chain_max`) ✓ candidate (`--preset l8_chain`, `l8` weeks only so far)
+
+- **Why:** half our cars still went alone at ~1.06–1.10× their typical fee, against 0.76× in a pair (Exp. 40). Pairs were formed only among cars held at the same plan time.
+- **Rule** (`Desk.plan_chains`, `build_chains`, `chain_fits`): at each plan, the pool is the held cars **plus posted one-car gigs no driver has booked**. Greedy chaining joins the two chains with the best link (round trip home first, then the shortest empty drive) while one driver can still do the whole chain on time (each car `pair_margin_h` before its deadline, pickup slots kept, ≤ 12 h). A posted car joins only after its gig is confirmed withdrawn. `chain_max` cars per gig; fee `pair_fee` × their typical fees.
+- **Measure:** `analysis/sharing.py --note "..."` (cars shared vs. alone and their fee ÷ typical fee).
+
+| `l8_plan2` + | l8 | Cars shared | Worst |
+|---|---|---|---|
+| none (pairs, plan every 3 h) | €112,459 | ~49% | 92.0% |
+| `chain_max=3` | €116,151 (+3.3%) | 55% | 94.0% |
+| **`chain_max=3 plan_every_h=1`** | **€119,036 (+5.8%)** | 58% | 93.5% |
+| … same, after `chain_fits` also keeps pickup slots (= `l8_chain`) | **€119,744 (+6.5%)** | | **94.1%** |
+| … + `wait_h=12` | €119,212 | 58% | 93.9% |
+| … + `chain_replan=1` (re-plan unbooked chains instead of splitting) | €115,868 | 63% | 93.4% ✗ |
+
+- **Still alone with chains** (per week): no partner within 50 km and the deadlines 65 cars (€950 extra vs. shared), chain split after 2 h 29 (€599), private address 19 (€463), charging, retries, trade-ins 26 (~€620).
+- **Lesson:** wider pools and hourly plans help (+€7.3k on `l8`); re-planning unbooked chains shares more cars but churns gigs and loses money. Private addresses in chains (`chain_private=1`) not tested yet.
+- **Next:** `l8_chain` on `l8x` and `l8y`.

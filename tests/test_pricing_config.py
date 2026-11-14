@@ -170,6 +170,44 @@ class PairChange(unittest.TestCase):
         self.assertEqual(posted, ["A", "B"])
 
 
+class Chains(unittest.TestCase):
+    """Desk.build_chains: one driver takes several cars when each delivery is near the next pickup."""
+
+    def desk(self, chain_max):
+        roads = {(a, b): {"km": 0 if a == b else 20, "minutes": 0 if a == b else 60} for a in "xyz" for b in "xyz"}
+        desk = Desk(None, 8, 0, Params(chain_max=chain_max, pair_km=30, pair_margin_h=4, pair_lead_min=60), roads)
+        for oid, (start, end) in {"A": ("x", "y"), "B": ("y", "z"), "C": ("z", "x")}.items():
+            window = {"from": 0, "to": DAY}
+            car = {"premium": False, "electric": False, "chargePercent": None}
+            pickup = {"placeId": start, "privateAddress": False, "window": window}
+            delivery = {"placeId": end, "privateAddress": False, "window": window}
+            desk.orders[oid] = {
+                "id": oid,
+                "legs": [{"car": car, "pickup": pickup, "delivery": delivery}],
+                "deadline": DAY,
+                "deliveredAt": [None],
+                "lastPickupAt": DAY - 2 * HOUR,
+            }
+            desk.requests[oid] = {"referenceFeeCents": 5000, "note": None, "legs": [{}]}
+        return desk
+
+    def chains(self, chain_max):
+        desk = self.desk(chain_max)
+        return sorted(len(c) for c in desk.build_chains({o: desk.single_stops(o) for o in "ABC"}))
+
+    def test_three_cars_in_one_chain(self):
+        self.assertEqual(self.chains(3), [3])
+
+    def test_chain_max_two_makes_a_pair_and_a_single(self):
+        self.assertEqual(self.chains(2), [1, 2])
+
+    def test_late_deadline_breaks_the_chain(self):
+        desk = self.desk(3)
+        desk.orders["C"]["deadline"] = 3 * HOUR  # C can't wait for A and B first
+        chains = desk.build_chains({o: desk.single_stops(o) for o in "ABC"})
+        self.assertTrue(all(c.index("C") == 0 for c in chains if "C" in c))
+
+
 class Config(unittest.TestCase):
     def test_overrides_use_field_types_not_preset_values(self):
         p = from_overrides(["decline_km=450.5", "raise_steps=4"], PRESETS["l8"])
@@ -183,7 +221,8 @@ class Config(unittest.TestCase):
 
     def test_presets_exist(self):
         self.assertEqual(
-            set(config.PRESETS), {"starter", "l1", "l8", "l8_plan", "l8_plan2", "l8_guarded", "l8_v3", "l8_v2", "l8_v1"}
+            set(config.PRESETS),
+            {"starter", "l1", "l8", "l8_plan", "l8_plan2", "l8_chain", "l8_guarded", "l8_v3", "l8_v2", "l8_v1"},
         )
         self.assertIs(PRESETS["starter"], DEFAULT)
 
