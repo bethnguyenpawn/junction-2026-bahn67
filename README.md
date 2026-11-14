@@ -8,25 +8,26 @@ it quotes prices to car dealers, wins orders, and hires freelance drivers to mov
 
 More: [PROGRESS.md](PROGRESS.md) (status, next steps, deadlines) · [LESSONS.md](LESSONS.md) (every experiment, including what failed) · [docs/CHALLENGE_SUMMARY.md](docs/CHALLENGE_SUMMARY.md) (the challenge in plain words).
 
-## 📊 Status (Sat 14 Nov, late morning)
+## 📊 Status (Sat 14 Nov, 10:00)
 
 | Level 8 | Margin per week | Notes |
 |---|---|---|
 | Official starter | −€60,442 | never ranked (46% late) |
 | **`--preset l8`** (current) | **+€10,265** | 30 test weeks, all ranked, worst week 92.6% on time. Use this for ranking runs and the final. |
 | Our practice round "Saturday 00:00" (old preset) | €9,299 | **rank 43 of 62** |
-| 10th place / House best / 1st in that round | €15,095 / €14,358 / €17,185 | **top 10 needs ≈ +€6,000/week** |
+| 10th place / House best / 1st in that round | €15,095 / €14,358 / €17,185 | **top 10 needs ≈ +€5,000/week** |
 
 What we have measured:
-- We win ~23% of the requests we quote. Win rate vs our price: 1.2× list 61%, 1.4× 40%, 1.6× 19%. Profit per request is flat from 1.1× to 1.4×, so **price tuning alone won't close the gap**.
-- We use only 100–150 of the 650–950 drivers a week, and driver fees are ~60% of revenue: **cheaper drivers are the big lever**.
-- Didn't work: dealer-trust pricing, flat fees, other fee caps, direct offers to drivers near the delivery town, separate prices per delivery option.
-- Cheaper base price (1.4×) and longer trips (> 550 km) look good on some weeks but leave a week under 90% on fresh weeks.
+- **Price:** win rate at 1.2× list 61%, 1.4× 40%, 1.6× 19%. Profit per request is flat from 1.1× to 1.4×, so price tuning alone won't close the gap. Cheaper prices and longer trips leave a fresh week under 90%.
+- **Drivers:** we use 100–150 of the 650–950 drivers a week; fees are ~60% of revenue. Our fee schedule is already at its optimum as one level for all cars.
+- **Mondays:** we win almost nothing (the competitor starts each week cheap).
+- **No gain** (code kept, off): dealer-trust pricing, flat fees, fee level per car, direct offers, two-car gigs, win-rate steering, price by our cost.
+- **Restart works:** rebuilding mid-week from the server gives the same result; the final loop skips a failing event instead of stopping.
 
 Next:
-1. **Test final Sat 14:00 / 20:00:** `python main.py --final --preset l8` (the live loop has never run; check it keeps up and survives a restart).
-2. Cheaper drivers: multi-car gigs (return trips, two cars from one yard), offers to drivers who just finished our gigs nearby.
-3. Price-war day (competitor −20% for one day), and handling after `deadline_close`.
+1. **Test final Sat 14:00 / 20:00:** start `python main.py --final --preset l8` before it begins (the live loop has never run on a moving clock).
+2. Cheaper drivers: offers to drivers who just finished our gigs nearby; holding new orders a few minutes to pair them.
+3. Price-war day (competitor −20% for one day) and the outage region (competitor down for a day).
 
 ## ⚙️ How it works
 

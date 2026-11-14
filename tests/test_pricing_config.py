@@ -74,6 +74,16 @@ class Pricing(unittest.TestCase):
         self.assertEqual(pricing.quote(r, 8, Params(quote_mult=1.5, private_add=0.2)), {"same_day": 17000})
         self.assertEqual(pricing.quote(r, 8, Params(quote_mult=1.5, private_add=9)), {"same_day": 100000})
 
+    def test_win_rate_adjustment_moves_the_price(self):
+        p = Params(quote_mult=1.5)
+        self.assertEqual(pricing.quote(request([SAME]), 8, p, adapt=-0.1), {"same_day": 14000})
+        self.assertEqual(pricing.quote(request([SAME]), 3, p, adapt=-0.1), {"same_day": 10000})  # levels 1-3: list
+
+    def test_is_decline(self):
+        r = request([SAME, NEXT])
+        self.assertTrue(pricing.is_decline(r, {"same_day": 100000}))
+        self.assertFalse(pricing.is_decline(r, {"same_day": 14500, "next_day": 13050}))
+
     def test_prices_are_whole_cents(self):
         q = pricing.quote(request([("same_day", 20 * 60, 3333)]), 8, Params(quote_mult=1.37))
         self.assertIsInstance(q["same_day"], int)

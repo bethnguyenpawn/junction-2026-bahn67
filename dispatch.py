@@ -132,6 +132,8 @@ class Desk:
         self.world, self.level, self.now, self.p = world, level, now, params
         self.roads = roads or {}  # (from place, to place) -> {"km", "minutes"}
         self.near = near or {}  # place id -> drivers living within 30 km (empty = not loaded)
+        self.adapt = 0.0  # price adjustment steered by our recent win rate (Params.adapt_*)
+        self.priced: set[str] = set()  # requests we quoted to win (not declined)
         self.last_seen: dict[str, int] = {}  # driver id -> minute they last viewed one of our gigs
         self.offers_sent: dict[tuple[str, int], int] = {}  # (driver id, day) -> direct offers sent
         self.outbox: list[Action] = []
@@ -213,7 +215,10 @@ class Desk:
         if kind == "price_request":
             self.quote(event["request"])
         elif kind == "order_won":
+            self.learn(event["order"]["id"], won=True)
             self.win(event["order"])
+        elif kind == "order_lost":
+            self.learn(event["requestId"], won=False)
         elif kind == "order_changed":
             self.change(event["order"])
         elif kind == "order_cancelled":
@@ -265,23 +270,103 @@ class Desk:
         road = self.roads.get((leg["pickup"]["placeId"], leg["delivery"]["placeId"]))
         near = len(self.near[leg["pickup"]["placeId"]]) if self.near else None
         prices = pricing.quote(request, self.level, self.p, road["km"] if road else 0.0, self.backlog(),
-                               road["minutes"] if road else 0, self.trust.get(request["dealerId"], 0), near)
+                               road["minutes"] if road else 0, self.trust.get(request["dealerId"], 0), near, self.adapt)
+        if prices and not pricing.is_decline(request, prices):
+            self.priced.add(request["id"])
         if prices:
             self.outbox.append(
                 {"type": "quote", "requestId": request["id"], "prices": prices}
             )
 
+    def learn(self, request_id: str, won: bool) -> None:
+        """Win-rate steering: each answer to a real quote moves the price a step, so that over time we win
+        adapt_target of our quotes. It follows the competitor's level, its slow Mondays and its price-war day."""
+        p = self.p
+        if not p.adapt_target or request_id not in self.priced:
+            return
+        self.priced.discard(request_id)
+        if won:
+            self.adapt = min(p.adapt_hi, self.adapt + p.adapt_step * (1 - p.adapt_target))
+        elif self.backlog_count() <= p.adapt_backlog:
+            self.adapt = max(p.adapt_lo, self.adapt - p.adapt_step * p.adapt_target)
+
     def backlog(self) -> int:
         """Won orders with an undelivered car that no driver holds."""
-        if not self.p.backlog_k:
-            return 0
+        return self.backlog_count() if self.p.backlog_k else 0
+
+    def backlog_count(self) -> int:
         return sum(1 for oid, order in self.orders.items()
                    if undelivered(order) and not any(g in self.booked for g in self.gigs_of(oid)))
 
     def win(self, order: Order) -> None:
         if order["id"] in self.requests and order["id"] not in self.orders:
             self.orders[order["id"]] = order
-            self.post(order, undelivered(order))
+            if not (self.p.pair_fee and self.pair(order)):
+                self.post(order, undelivered(order))
+
+    def pair(self, order: Order) -> bool:
+        """Puts a new one-car order in one gig with a waiting one-car gig, when one driver can deliver both
+        on time: the first car ends near the second's pickup. Withdraws the waiting gig. False = no partner."""
+        new = self.single_stops(order["id"])
+        if new is None:
+            return False
+        best = None
+        for gig_id, action in self.posts.items():
+            other = action["stops"][0]["orderId"]
+            if (gig_id in self.booked or len(action["stops"]) != 2 or other in self.urgent
+                    or self.leg_gigs.get(other, {}).get(0) != gig_id or self.single_stops(other) is None):
+                continue
+            for first, second in ((action["stops"], new), (new, action["stops"])):
+                link = self.chain_minutes(first, second)
+                if link is not None and (best is None or link < best[0]):
+                    best = (link, gig_id, first + second)
+        if best is None:
+            return False
+        _, gig_id, stops = best
+        other = self.posts[gig_id]["stops"][0]["orderId"]
+        self.outbox.append({"type": "withdraw", "gigId": gig_id})
+        self.leg_gigs.pop(other, None)
+        self.first_posted.setdefault(order["id"], self.now)
+        premium = any(leg["car"]["premium"] for oid in (order["id"], other) for leg in self.orders[oid]["legs"])
+        self.outbox.append({"type": "post", "stops": stops, "audience": {"experienced": premium, "manualLicence": False},
+                            "schedule": self.fees_for(stops)})
+        return True
+
+    def single_stops(self, order_id: str) -> Optional[list[StopRef]]:
+        """The stops of a plain one-car order (no private address, no plates, no charging), else None."""
+        order = self.orders.get(order_id)
+        if order is None or len(order["legs"]) != 1 or undelivered(order) != [0]:
+            return None
+        leg = order["legs"][0]
+        if leg["pickup"]["privateAddress"] or leg["delivery"]["privateAddress"]:
+            return None
+        stops = without_windows(stops_for(order, [0], self.requests[order_id]["note"], Retry()), self.now)
+        return None if stops[0].get("withCharging") else stops
+
+    def chain_minutes(self, first: list[StopRef], second: list[StopRef]) -> Optional[int]:
+        """Road minutes from the first car's delivery to the second car's pickup, when one driver starting
+        pair_lead_min from now delivers both pair_margin_h before their deadlines within 12 h of driving."""
+        def span(stops):
+            order = self.orders[stops[0]["orderId"]]
+            leg = order["legs"][0]
+            ready = stops[0].get("window", leg["pickup"]["window"])["from"]
+            due = min(order["deadline"], stops[1].get("window", {"to": order["deadline"]})["to"])
+            return leg["pickup"]["placeId"], leg["delivery"]["placeId"], ready, due
+        p1, d1, ready1, due1 = span(first)
+        p2, d2, ready2, due2 = span(second)
+        link = self.roads.get((d1, p2))
+        drive1, drive2 = self.roads.get((p1, d1)), self.roads.get((p2, d2))
+        if not (link and drive1 and drive2) or link["km"] > self.p.pair_km:
+            return None
+        if drive1["minutes"] + link["minutes"] + drive2["minutes"] > 12 * HOUR:
+            return None
+        margin = self.p.pair_margin_h * HOUR
+        start = max(self.now + self.p.pair_lead_min, ready1)
+        at1 = start + drive1["minutes"]
+        at2 = max(at1 + link["minutes"], ready2) + drive2["minutes"]
+        if at1 > due1 - margin or at2 > due2 - margin or at2 - start > 12 * HOUR:
+            return None
+        return link["minutes"]
 
     def change(self, order: Order) -> None:
         if order["id"] in self.orders:
@@ -302,12 +387,12 @@ class Desk:
         order = self.orders.get(action["stops"][0]["orderId"])
         if order is None:
             return
-        stops = without_windows(action["stops"], float("inf"))
+        stops = without_windows([s for s in action["stops"] if s["orderId"] in self.orders], float("inf"))
         self.outbox.append(
             {
                 **action,
                 "stops": stops,
-                "schedule": self.fees_for(order, pickups(action)),
+                "schedule": self.fees_for(stops),
             }
         )
 
@@ -320,26 +405,38 @@ class Desk:
         self.send_post_of(order_id)
         for gig_id in self.gigs_of(order_id):
             if gig_id not in self.booked:
-                new = self.fees_for(order, pickups(self.posts[gig_id]))
+                new = self.fees_for(self.posts[gig_id]["stops"])
                 self.outbox.append(
                     {"type": "reprice", "gigId": gig_id, "schedule": new}
                 )
                 self.posts[gig_id] = {**self.posts[gig_id], "schedule": new}
 
-    def fees_for(self, order: Order, cars: int) -> list[FeeStep]:
-        fee = (
-            self.requests[order["id"]]["referenceFeeCents"] * cars / len(order["legs"])
-        )
-        if order["id"] in self.urgent:
+    def fees_for(self, stops: list[StopRef]) -> list[FeeStep]:
+        """The fee schedule of a gig: the typical fee of each car it carries; steep once any order is urgent."""
+        order_ids = list(dict.fromkeys(stop["orderId"] for stop in stops))
+        fee = sum(self.requests[stop["orderId"]]["referenceFeeCents"] / len(self.requests[stop["orderId"]]["legs"])
+                  for stop in stops if stop["kind"] == "pickup")
+        if len(order_ids) > 1:
+            fee *= self.p.pair_fee  # one driver, one trip there and one home for both cars
+        if any(order_id in self.urgent for order_id in order_ids):
             return steep_schedule(self.now, fee, self.level, self.p)
+        order = self.orders.get(order_ids[0])
+        if order is not None:
+            fee *= self.ease(order)
         if self.p.ladder_per_hour > 0:
-            return [
-                {
-                    "at": self.now,
-                    "feeCents": max(1, int(fee * self.ladder_mult(order["id"]) + 0.5)),
-                }
-            ]
+            return [{"at": self.now, "feeCents": max(1, int(fee * self.ladder_mult(order_ids[0]) + 0.5))}]
         return fee_schedule(self.now, fee, self.level, self.p)
+
+    def ease(self, order: Order) -> float:
+        """Fee factor for how easy the car is to move: many drivers near the pickup (they hear of the gig and
+        pay little to reach it), or many hours left before the last pickup (time to raise slowly). 1.0 = off."""
+        p, factor = self.p, 1.0
+        pickup = order["legs"][undelivered(order)[0] if undelivered(order) else 0]["pickup"]["placeId"]
+        if p.dense_fee != 1.0 and self.near and len(self.near[pickup]) >= p.dense_n:
+            factor *= p.dense_fee
+        if p.slack_fee != 1.0 and order["lastPickupAt"] - self.now >= p.slack_fee_h * HOUR:
+            factor *= p.slack_fee
+        return factor
 
     def ladder_mult(self, order_id: str) -> float:
         hours = (self.now - self.first_posted.get(order_id, self.now)) / HOUR
@@ -356,7 +453,7 @@ class Desk:
                 if gig_id in self.booked or gig_id not in self.posts:
                     continue
                 post = self.posts[gig_id]
-                new = self.fees_for(self.orders[order_id], pickups(post))
+                new = self.fees_for(post["stops"])
                 if new[-1]["feeCents"] > post["schedule"][-1]["feeCents"]:
                     self.outbox.append(
                         {"type": "reprice", "gigId": gig_id, "schedule": new}
@@ -398,7 +495,7 @@ class Desk:
                 "type": "post",
                 "stops": stops,
                 "audience": audience,
-                "schedule": self.fees_for(order, len(legs)),
+                "schedule": self.fees_for(stops),
             }
         )
         if len(legs) == 1:
@@ -482,10 +579,6 @@ def undelivered(order: Order) -> list[int]:
     return [
         leg for leg in range(len(order["legs"])) if order["deliveredAt"][leg] is None
     ]
-
-
-def pickups(action: PostAction) -> int:
-    return sum(1 for stop in action["stops"] if stop["kind"] == "pickup")
 
 
 def without_windows(stops: list[StopRef], before: float) -> list[StopRef]:

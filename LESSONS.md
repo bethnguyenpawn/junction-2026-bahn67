@@ -323,3 +323,69 @@ Booked step: 922 at the opening fee, 460 at the cap, the rest between (10 weeks)
 | **dense −0.2 + private +0.2 → new `l8`** | **€95,102** | **€99,994** | **€112,847** | **€307,943 (+3.6%)** | **92.6%** ✓ |
 
 - **Lesson:** the two new rules add margin *and* safety; the extra relaxations (cheaper base price, longer trips) that looked good on 20 weeks failed on fresh weeks. `l8b` removed from the presets.
+
+# Saturday late morning (base: new `--preset l8`, l8 €95,102 · l8x €99,994 · l8y €112,847)
+
+## Experiment 23: fee level by how easy the car is (`dense_fee`, `slack_fee`) ✗
+
+Scale the whole normal fee schedule for easy cars (many drivers near the pickup, or ≥ 24 h before the last pickup).
+
+| Change | l8 | Worst |
+|---|---|---|
+| dense pickup fee × 0.9 | €91,929 | 94.8% |
+| dense pickup fee × 0.8 | €82,965 | 93.6% |
+| dense pickup fee × 1.1 | €93,472 | 94.9% |
+| ≥ 24 h left: fee × 0.9 | €92,124 | 93.3% |
+| all fees × 1.1 | €91,581 | 94.6% |
+
+- **Lesson:** the fee schedule is at its optimum as one level for all cars; lower fees lose bookings, higher fees lose margin.
+
+## Experiment 24: two-car gigs (`pair_fee`, `pair_km`, `pair_margin_h`) ~ not adopted
+
+- **Idea:** a driver delivers car A and picks up car B near A's destination: one trip there and one home for two cars, so pay less than two fees. A new one-car order joins a waiting (unbooked) one-car gig when both can be delivered on time within 12 h of driving; the waiting gig is withdrawn and one two-car gig posted.
+- Potential: ~900 pairable orders over 10 weeks; in practice ~35 pairs/week form (most gigs are booked before a partner arrives).
+
+| Change | l8 | l8x | l8y | Worst |
+|---|---|---|---|---|
+| pair fee 1.0×, 30 km | €95,473 | | | 93.3% |
+| 0.9×, 30 km | €92,401 | | | 93.4% |
+| 0.8×, 30 km | €96,116 | | | 95.2% |
+| 0.7×, 30 km | €87,400 | | | 92.2% |
+| 0.8×, 100 km | €92,440 | | | 92.3% |
+| **0.8×, 60 km** | €98,485 | €101,293 | €117,377 | **89.1%** ✗ (l8y) |
+| 0.8×, 60 km, 4 h margin | €98,293 | €99,567 | | 92.8% |
+
+- **Lesson:** +€3–4k per 10 weeks at best, about the noise; paired cars are late more often (6% vs 4%). Code kept, off.
+
+## Experiment 25: win-rate steering (`adapt_target`, …) ~ not adopted
+
+- **Why:** in 7 of 10 weeks we win only 1–10% of quotes on Monday (25–55% other days): the competitor starts the week cheap and raises its prices for dealers we rarely win. Some weeks also have one weak day (likely the price war).
+- **Idea:** after each answer to a real quote, move the price: −0.01 × target per loss, +0.01 × (1 − target) per win (limits ±0.3), so we win `adapt_target` of our quotes.
+
+| Change | l8 | l8x | Worst |
+|---|---|---|---|
+| target 30% | €89,893 | | 95.6% |
+| target 40% | €92,085 | | 95.4% |
+| target 25%, only lower | €98,073 | | 95.0% |
+| **target 40%, only lower** | €98,517 | €100,773 | 91.7% |
+| … limit −0.5 | €95,616 | | 93.7% |
+| … step 0.02 | €96,930 | | 94.8% |
+
+- **Lesson:** raising the price on winning streaks costs margin; only-lower gives +€4.2k over 20 weeks (+2%) but a lower worst week. Code kept, off.
+
+## Experiment 26: price by our cost (`cost_k`) ✗
+
+- **Idea:** quote_mult + cost_k × (typical fee / list − 0.9): the typical fee is 0.82× list on short trips but 0.95× on long ones.
+
+| cost_k | l8 | Worst |
+|---|---|---|
+| 0 (current) | €95,102 | 95.7% |
+| 1 | €94,544 | 93.5% |
+| 2 | €79,460 | 91.7% |
+| −1 | €67,457 | 95.1% |
+
+- **Lesson:** a flat markup on the list price is best; the competitor's lane prices already follow how hard a lane is for drivers.
+
+## Restart test (the final's recovery path) ✓
+
+Played `l8-a` to Wednesday 12:00, threw the desk away, rebuilt it with `Desk.rejoin` from the snapshot and events, played on: **€11,739.88 vs €11,737.33 uninterrupted**, same orders and on-time share. `play_final` now also skips an event whose handling fails and rebuilds after any other error, instead of stopping.

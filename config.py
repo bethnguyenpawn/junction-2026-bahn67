@@ -9,43 +9,57 @@ HOUR, DAY = 60, 24 * 60
 
 @dataclass(frozen=True)
 class Params:
-    # Quoting (levels 4+; levels 1-3 always win at list price). Price = list price x quote_mult.
+    """Every tunable number. Defaults = the kit starter exactly; a rule with value 0 (or 1.0 for a factor) is off."""
+
+    # --- Quoting (levels 4+; levels 1-3 always win at list price). Price = list x quote_mult + adjustments.
     quote_mult: float = 1.0
-    backlog_k: float = 0.0          # levels 4+: quote_mult += backlog_k x (won orders still without a driver); 0 = off
-    min_slack_h: float = 0.0        # levels 4+: quote only options with deadline - drive - now >= this many hours; 0 = off (first option only)
-    later_mult: float = 1.0         # levels 4+, slack filter on: extra factor on next_day / within_3_days prices
-    trust_w: float = 0.0            # level 8: price x (1 + trust_w x 1% x dealer's on-time count, max 25); 0 = off, 1 = full trust
-    decline_km: float = 0.0         # levels 4+: decline (quote 10x list) when the first leg is longer; 0 = off
-    private_add: float = 0.0        # levels 4+: quote_mult + this when a stop is a private address (>= 5 = decline); 0 = off
-    explore_lo: float = 0.0         # research only: quote a random multiplier in [explore_lo, explore_hi] (by request id); 0 = off
-    explore_hi: float = 0.0
-    dense_n: int = 0                # levels 4+: pickup with >= dense_n drivers living within 30 km: quote_mult - dense_cut; 0 = off
-    dense_cut: float = 0.0
-    sparse_n: int = 0               # levels 4+: pickup with < sparse_n drivers within 30 km: quote_mult + sparse_add; 0 = off
-    sparse_add: float = 0.0
+    backlog_k: float = 0.0          # + backlog_k per won order still without a driver
+    dense_n: int = 0                # pickup with >= dense_n drivers living within 30 km ...
+    dense_cut: float = 0.0          # ... - dense_cut
+    private_add: float = 0.0        # + this when a stop is a private address (>= 5 = decline)
+    decline_km: float = 0.0         # decline (quote 10x list) when the first leg is longer
+    min_slack_h: float = 0.0        # quote only options with deadline - drive - now >= this many hours (0 = first option only)
 
-    # Direct offers when a gig is first posted: offer_mult x the app's opening fee, to up to offer_n drivers
-    # who live near the delivery place. 0 = off.
-    offer_mult: float = 0.0
-    offer_n: int = 3
-
-    # Normal fee schedule, as multiples of the request's typical fee (referenceFeeCents).
+    # --- Normal driver fee schedule, as multiples of the request's typical fee (referenceFeeCents).
     open_mult: float = 1.0          # opening fee
     raise_per_step: float = 0.10    # added per step (levels 2+; level 1 allows one step)
     raise_every_min: int = HOUR     # minutes between steps
     raise_steps: int = 6            # steps in the schedule, so the cap is open + (steps-1)*raise
 
-    # Steep schedule after deadline_close.
+    # --- Steep schedule after deadline_close.
     steep_open_mult: float = 1.5
     steep_raise_per_step: float = 0.25
     steep_every_min: int = 30
     steep_steps: int = 5
 
-    # Ladder: our own raises by reprice, for gigs no driver has booked (0 = off, starter behaviour).
-    # Target fee = min(ladder_cap, open_mult + ladder_per_hour * hours since the order was first posted).
+    # --- Level 1 ladder: our own raises by reprice for unbooked gigs. Fee = min(cap, open_mult + per_hour x hours).
     ladder_per_hour: float = 0.0
     ladder_cap: float = 1.5
     tick_min: int = 10              # how often the practice loop wakes up to raise fees
+
+    # --- Tested and off: kept so every experiment in LESSONS.md can be rerun (see the experiment number).
+    later_mult: float = 1.0         # Exp. 14: factor on next_day / within_3_days prices
+    trust_w: float = 0.0            # Exp. 8: price x (1 + trust_w x 1% x dealer's on-time count, max 25)
+    sparse_n: int = 0               # Exp. 17: pickup with < sparse_n drivers within 30 km ...
+    sparse_add: float = 0.0         # ... + sparse_add
+    explore_lo: float = 0.0         # research: a random price in [explore_lo, explore_hi] per request
+    explore_hi: float = 0.0
+    offer_mult: float = 0.0         # Exp. 18: direct offers at offer_mult x opening fee ...
+    offer_n: int = 3                # ... to this many drivers living near the delivery place
+    dense_fee: float = 1.0          # Exp. 23: fee factor when the pickup has >= dense_n drivers near
+    slack_fee: float = 1.0          # Exp. 23: fee factor with >= slack_fee_h hours before lastPickupAt
+    slack_fee_h: float = 24.0
+    pair_fee: float = 0.0           # Exp. 24: two-car gigs; fee = pair_fee x both typical fees
+    pair_km: float = 30.0           # first car's delivery within this many road km of the second's pickup
+    pair_lead_min: int = 60         # the driver starts no earlier than this many minutes from now
+    pair_margin_h: float = 2.0      # both cars due at least this long after the planned delivery
+    adapt_target: float = 0.0       # Exp. 25: steer the price so we win this share of our quotes
+    adapt_step: float = 0.01        # +step x (1 - target) per win, -step x target per loss
+    adapt_lo: float = -0.3          # limits of the adjustment
+    adapt_hi: float = 0.3
+    adapt_backlog: int = 5          # only lower the price while at most this many won orders lack a driver
+    cost_k: float = 0.0             # Exp. 26: + cost_k x (typical fee / list - cost_mid)
+    cost_mid: float = 0.9
 
     def as_dict(self) -> dict:
         return asdict(self)

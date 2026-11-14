@@ -14,6 +14,7 @@ import argparse
 import os
 import sys
 import time
+import traceback
 from typing import Optional
 
 from spread.client import Client, SpreadError, Unreachable, World
@@ -83,7 +84,11 @@ def play_final(world: World, params: Params) -> None:
         day = desk.now // DAY
         desk.now = world.client.final()["now"] if event is None else max(desk.now, event["at"])
         if event is not None:
-            desk.handle(event)
+            try:
+                desk.handle(event)
+            except Exception:  # one odd event must not stop the week: log it, skip it, go on
+                print(f"Skipped event {event.get('seq')} ({event.get('kind')}):", file=sys.stderr)
+                traceback.print_exc()
         desk.tick()
         desk.send()
         if desk.now // DAY > day:
@@ -142,6 +147,10 @@ def main() -> None:
                 except Unreachable as error:
                     print(f"spread: {error}. Trying again in 5 seconds.", file=sys.stderr, flush=True)
                     time.sleep(5)
+                except Exception:  # any other failure: rebuild from the world and go on; the clock does not wait
+                    traceback.print_exc()
+                    print("Rebuilding from the world in 2 seconds.", file=sys.stderr, flush=True)
+                    time.sleep(2)
             score = world.score()
         else:
             if args.board and args.seed:
