@@ -142,7 +142,7 @@ Played the round's 5 secret weeks with `--preset l8` (ranking runs, started by t
 | 5 | €11,046 | 95.3% |
 | **Total** | **€46,496** | 95.8%, 5/5 ranked |
 
-Rank 11 of 25. 10th: €51,157 · House best: €71,790 · 1st (Juhus): €80,030.
+Rank 11 of 25 while the round was open; final rank **43 of 62** (10th €75,475, House best €71,790, 1st €85,925).
 Our own estimate (+€8,080/week) matched the secret weeks (+€9,299/week), so the seed sets predict well.
 **Lesson:** we are reliable (on-time never below 95%) but under-earn by ≈ €5,000/week vs House best. Next gains must come from margin, not safety.
 
@@ -246,3 +246,73 @@ l8 €96,223 · l8x €100,096 (worst 91.3%) · l8y €115,529 (worst **90.8%**)
 
 **Why 550 over 600:** −€270/week for half a point more safety on the worst week. The final is one week, played once; being unranked loses everything.
 **Stopped here:** every further change gained < €300/week or cost safety.
+
+# Saturday morning: structural ideas (on `--preset l8`, seeds l8-a..j, base €89,964)
+
+## Experiment 17: price by drivers near the pickup (`dense_n`, `dense_cut`, `sparse_n`, `sparse_add`)
+
+Drivers living within 30 km of the pickup, from the driver list (`dispatch.drivers_near`, one read).
+
+| Change | l8 | Worst | Verdict |
+|---|---|---|---|
+| ≥ 40 drivers near: −0.1 | €93,776 | 93.9% | ✓ |
+| **≥ 40 drivers near: −0.2** | **€94,887** | **94.1%** | ✓ best (+€4.9k), needs l8x/l8y check |
+| ≥ 40 drivers near: −0.3 | €92,407 | 94.2% | ✗ |
+| −0.2 dense, +0.2 when < 5 near | €95,508 | 92.6% | ~ +€0.6k, less safe |
+| quote 1.3 + dense −0.2 | €91,373 | 92.7% | ✗ 280–385 orders/week (vs ~205), same margin |
+
+## Research: price curve (`explore_lo/hi`, random price 1.0–2.0× list per request, 10 weeks)
+
+Win rate by our price/list: 1.0 83% · 1.1 80% · 1.2 61% · 1.3 50% · 1.4 40% · 1.5 26% · 1.6 19% · 1.7 10%.
+Monday is much lower (1.3×: 24% vs ~58% Tue–Fri). Profit per request is flat from 1.1× to 1.4×.
+
+## What limits margin (findings)
+
+- We quote ~910 requests/week and win ~23% (205 orders); the competitor takes the rest.
+- We use only 100–150 of the 650–950 drivers a week (30–60 a day): **drivers are not scarce; the fee is the lever.**
+- Driver fees are ~60% of revenue, booked at 0.9–1.0× typical. Short trips (< 100 km) earn €18–25/order; 400–599 km €47–84.
+- Private-address orders: 11.4% late, €8/order (at q1.3) → candidate to decline.
+
+## Experiment 18: direct offers to drivers near the delivery town (`offer_mult`) ✗
+
+- **Idea:** they pay no trip home and the app never notifies them, so they should take the car cheaply. On each new gig, offer it to 3 of them (those who viewed our gigs in the last day first).
+- **Result:** almost nobody takes it. ~4,500 offers per 10 weeks: ~3,500 expire unread (the driver isn't working), ~950 declined.
+
+| offer fee | accepted | l8 | Verdict |
+|---|---|---|---|
+| 0.75 × opening fee (0.6× typical) | 18 | €90,652 | ✗ no effect |
+| 1.1 × opening fee | 107 | €89,700 | ✗ |
+
+Code kept, off by default.
+
+## Experiment 19: fee cap (`raise_steps`) ✗ current is best
+
+| raise_steps (cap) | l8 | Worst |
+|---|---|---|
+| 4 (1.1×) | €84,996 | 90.8% |
+| 5 (1.2×) | €89,310 | 92.2% |
+| **6 (1.3×, current)** | **€89,964** | 93.2% |
+| 7 (1.4×) | €88,223 | 93.2% |
+
+Booked step: 922 at the opening fee, 460 at the cap, the rest between (10 weeks).
+
+## Experiment 20: private addresses (`private_add`)
+
+| Change | l8 | On time | Worst |
+|---|---|---|---|
+| base | €89,964 | 95.8% | 93.2% |
+| **+0.2 on private-address requests** | **€90,944** | 97.0% | **94.3%** ✓ |
+| decline them (+9) | €86,080 | 97.2% | 95.2% ✗ |
+
+## Experiment 21: combine (dense −0.2 at ≥ 40 drivers, private +0.2) and spend the safety
+
+| On l8 + dense −0.2 + private +0.2 | l8 | Worst | l8x | Worst |
+|---|---|---|---|---|
+| (nothing else) | €95,102 | 95.7% | | |
+| decline > 600 km | €99,178 | 93.0% | | |
+| decline > 700 km | €100,357 | 93.9% | €103,280 | **88.9%** ✗ |
+| **decline > 600, quote 1.4 → `--preset l8b`** | **€99,847** | **94.7%** | **€101,017** | **92.3%** ✓ |
+| decline > 600, backlog 0.02 | €101,369 | 93.8% | €102,815 | **89.3%** ✗ |
+
+**Candidate `l8b`:** €200,864 over l8 + l8x vs €185,562 for `l8` (+8%, +€765/week), worst week 92.3%.
+Not yet checked on `l8y`: do that before making it the default.

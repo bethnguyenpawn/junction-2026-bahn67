@@ -7,6 +7,7 @@ are the decision points we tune.
 
 from __future__ import annotations
 
+import math
 import re
 from typing import NamedTuple, Optional
 
@@ -17,6 +18,7 @@ from spread.types import (
     Audience,
     DeskEvent,
     DeskSnapshot,
+    DriverProfile,
     FeeStep,
     Gig,
     Note,
@@ -31,13 +33,34 @@ import pricing
 from config import DAY, HOUR, Params
 
 _ROADS: dict = {}
+_PLACES: dict = {}
+NOTIFY_KM = 30  # RULES: the app notifies a driver of a gig whose first pickup is within 30 km of their home
 
 
 def roads_of(client) -> dict:
     """The map's roads keyed by (from, to). The map is the same for every world and costs no token: load once."""
     if not _ROADS:
-        _ROADS.update({(r["from"], r["to"]): r for r in client.map()["roads"]})
+        m = client.map()
+        _ROADS.update({(r["from"], r["to"]): r for r in m["roads"]})
+        _PLACES.update({p["id"]: p for p in m["places"]})
     return _ROADS
+
+
+def straight_km(a: dict, b: dict) -> float:
+    dlat = math.radians(b["lat"] - a["lat"])
+    dlon = math.radians(b["lon"] - a["lon"]) * math.cos(math.radians((a["lat"] + b["lat"]) / 2))
+    return 6371 * math.hypot(dlat, dlon)
+
+
+def drivers_near(roster: list[DriverProfile]) -> dict[str, list[DriverProfile]]:
+    """Place id -> the drivers who live within NOTIFY_KM of it. At level 8 each town keeps its own share of
+    the drivers, so this says where a car is easy to move, and who lives near a delivery place."""
+    homes: dict[str, list[DriverProfile]] = {}
+    for driver in roster:
+        homes.setdefault(driver["homePlaceId"], []).append(driver)
+    return {pid: [d for h, ds in homes.items() if straight_km(p, _PLACES[h]) <= NOTIFY_KM for d in ds]
+            for pid, p in _PLACES.items()}
+
 
 # The events that need an answer. Views and account lines arrive with the next event that needs an answer.
 WAKE_ON = [
@@ -92,9 +115,13 @@ class Desk:
     """What we remember, and our answer to each event. Answers wait in the outbox until sent;
     the world applies them at the current minute."""
 
-    def __init__(self, world: World, level: int, now: int, params: Params, roads: Optional[dict] = None):
+    def __init__(self, world: World, level: int, now: int, params: Params, roads: Optional[dict] = None,
+                 roster: Optional[list[DriverProfile]] = None):
         self.world, self.level, self.now, self.p = world, level, now, params
         self.roads = roads or {}  # (from place, to place) -> {"km", "minutes"}
+        self.near = drivers_near(roster) if roster else {}  # place id -> drivers living within 30 km
+        self.last_seen: dict[str, int] = {}  # driver id -> minute they last viewed one of our gigs
+        self.offers_sent: dict[tuple[str, int], int] = {}  # (driver id, day) -> direct offers sent
         self.outbox: list[Action] = []
         self.requests: dict[str, PriceRequest] = {}
         self.orders: dict[str, Order] = {}  # won and not cancelled
@@ -194,6 +221,10 @@ class Desk:
             self.delivered(event["orderId"], event["leg"], event["at"])
         elif kind == "ledger":
             self.on_ledger(event["line"])
+        elif kind == "gig_viewed":
+            self.last_seen[event["driverId"]] = event["at"]
+        elif kind == "offer_answered" and event["answer"] == "accepted":
+            self.booked.add(event["gigId"])
 
     def on_ledger(self, line: dict) -> None:
         """Dealer trust from our own account (RULES): a revenue line without a late refund is an order on
@@ -220,8 +251,9 @@ class Desk:
         self.requests[request["id"]] = request
         leg = request["legs"][0]
         road = self.roads.get((leg["pickup"]["placeId"], leg["delivery"]["placeId"]))
+        near = len(self.near[leg["pickup"]["placeId"]]) if self.near else None
         prices = pricing.quote(request, self.level, self.p, road["km"] if road else 0.0, self.backlog(),
-                               road["minutes"] if road else 0, self.trust.get(request["dealerId"], 0))
+                               road["minutes"] if road else 0, self.trust.get(request["dealerId"], 0), near)
         if prices:
             self.outbox.append(
                 {"type": "quote", "requestId": request["id"], "prices": prices}
@@ -399,6 +431,28 @@ class Desk:
         for action, result in zip(actions, results):
             if action["type"] == "post" and result["ok"] is True:
                 self.carry(action, result["id"])
+                self.offer(action, result["id"])
+
+    def offer(self, action: PostAction, gig_id: str) -> None:
+        """Direct offers below the app's fee to drivers who live near the delivery place: the app does not
+        notify them, and the trip home costs them nothing, so the car is cheap for them (HANDBOOK)."""
+        order_id = action["stops"][0]["orderId"]
+        order = self.orders.get(order_id)
+        if not self.p.offer_mult or not self.near or order is None or order_id in self.urgent:
+            return
+        last = next(s for s in reversed(action["stops"]) if s["kind"] == "delivery")
+        place = order["legs"][last["leg"]]["delivery"]["placeId"]
+        audience, day = action["audience"], self.now // DAY
+        fits = [d for d in self.near.get(place, [])
+                if (not audience.get("experienced") or (d["rating"] >= 4.8 and d["completedGigs"] >= 50))
+                and (not audience.get("manualLicence") or d["licence"] == "manual")
+                and self.offers_sent.get((d["id"], day), 0) < 3]
+        # Drivers who looked at our gigs today work today; the rest read few offers.
+        fits.sort(key=lambda d: (-(self.last_seen.get(d["id"], -DAY) > self.now - DAY), -d["rating"]))
+        fee = max(1, int(action["schedule"][0]["feeCents"] * self.p.offer_mult + 0.5))
+        for d in fits[:self.p.offer_n]:
+            self.offers_sent[(d["id"], day)] = self.offers_sent.get((d["id"], day), 0) + 1
+            self.outbox.append({"type": "offer", "gigId": gig_id, "driverId": d["id"], "feeCents": fee})
 
 
 def retry_from(order: Order, request: PriceRequest, leg: int, now: int) -> int:

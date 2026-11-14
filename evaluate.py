@@ -23,7 +23,7 @@ import config
 from main import load_env, play_practice
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-MAX_PARALLEL = 6
+MAX_PARALLEL = 6  # leaves two slots for teammates (team limit 8)
 
 
 def git_commit() -> str:

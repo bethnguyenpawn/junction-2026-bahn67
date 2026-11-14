@@ -16,6 +16,18 @@ class Params:
     later_mult: float = 1.0         # levels 4+, slack filter on: extra factor on next_day / within_3_days prices
     trust_w: float = 0.0            # level 8: price x (1 + trust_w x 1% x dealer's on-time count, max 25); 0 = off, 1 = full trust
     decline_km: float = 0.0         # levels 4+: decline (quote 10x list) when the first leg is longer; 0 = off
+    private_add: float = 0.0        # levels 4+: quote_mult + this when a stop is a private address (>= 5 = decline); 0 = off
+    explore_lo: float = 0.0         # research only: quote a random multiplier in [explore_lo, explore_hi] (by request id); 0 = off
+    explore_hi: float = 0.0
+    dense_n: int = 0                # levels 4+: pickup with >= dense_n drivers living within 30 km: quote_mult - dense_cut; 0 = off
+    dense_cut: float = 0.0
+    sparse_n: int = 0               # levels 4+: pickup with < sparse_n drivers within 30 km: quote_mult + sparse_add; 0 = off
+    sparse_add: float = 0.0
+
+    # Direct offers when a gig is first posted: offer_mult x the app's opening fee, to up to offer_n drivers
+    # who live near the delivery place. 0 = off.
+    offer_mult: float = 0.0
+    offer_n: int = 3
 
     # Normal fee schedule, as multiples of the request's typical fee (referenceFeeCents).
     open_mult: float = 1.0          # opening fee
@@ -50,6 +62,10 @@ PRESETS = {
     # fee opens 0.8x and rises 0.1x every 30 min. 30 weeks (l8, l8x, l8y): +€297,267 (€9,909/week), 30/30 ranked,
     # worst week 91.0%. l8y was never used for tuning: +€111,705 there vs +€98,442 for l8_v1.
     "l8": Params(quote_mult=1.45, backlog_k=0.03, decline_km=550, min_slack_h=8, open_mult=0.8, raise_every_min=30),
+    # Candidate (Sat morning): l8 + 0.2 cheaper where >= 40 drivers live near the pickup, +0.2 on private addresses,
+    # quote 1.4, decline > 600 km. l8 €99,847, l8x €101,017 (+8% over l8), worst week 92.3%. Not yet checked on l8y.
+    "l8b": Params(quote_mult=1.4, backlog_k=0.03, decline_km=600, min_slack_h=8, open_mult=0.8, raise_every_min=30,
+                  dense_n=40, dense_cut=0.2, private_add=0.2),
     # Previous level-8 preset (ranked 11/25 in round "Saturday 00:00"): +€79,155 / +€82,446.
     "l8_v1": Params(quote_mult=1.6, backlog_k=0.01, decline_km=500, min_slack_h=8, open_mult=0.8),
 }

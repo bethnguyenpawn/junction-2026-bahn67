@@ -54,7 +54,8 @@ Our development priorities are:
 | Previous preset `l8_v1` | €260,043 | 92.0% |
 | **Current `l8`** | **€297,267, 30/30 ranked** | **91.0%** |
 
-**Practice ranking (level 8, round "Saturday 00:00", with `l8_v1`): rank 11 of 25, €46,496 over 5 weeks.** 10th place: €51,157. House best: €71,790.
+**Practice ranking (level 8, round "Saturday 00:00", with `l8_v1`): rank 43 of 62, €46,496 over 5 weeks.** 10th place: €75,475. House best: €71,790.
+Candidate `--preset l8b` (cheaper where many drivers live, dearer for private addresses): +8% over `l8` on 20 weeks, being checked.
 
 How it works: quote 1.45× list price, higher when many orders still lack a driver; decline trips over 550 km; only offer delivery options with ≥ 8 h to find a driver; driver fees open at 0.8× the typical fee and rise every 30 min.
 Details: [PROGRESS.md](PROGRESS.md) (status, next steps, deadlines) · [LESSONS.md](LESSONS.md) (every experiment, including what failed).
@@ -85,7 +86,7 @@ python main.py --final --preset l8                               # play the fina
 python -m unittest discover -s tests                             # offline tests (no key needed)
 ```
 
-- Presets (`config.PRESETS`): `starter` (default, identical to the official starter), `l1`, `l8`, `l8_v1` (previous). `--set name=value` overrides any `Params` field.
+- Presets (`config.PRESETS`): `starter` (default, identical to the official starter), `l1`, `l8`, `l8b` (candidate), `l8_v1` (previous). `--set name=value` overrides any `Params` field.
 - Every `evaluate.py` run appends settings and scores to `results/log.jsonl`. Add a row to `LESSONS.md` for each experiment, and check level-8 changes on both seed sets.
 - Do **not** play ranking runs (`board: true`) without agreeing as a team: each round has only 5 per level.
 
@@ -98,7 +99,7 @@ junction-2026/
 ├── pricing.py           # Quotes: price multiplier, backlog, distance and slack filters
 ├── config.py            # All tunable parameters (Params) and presets
 ├── evaluate.py          # Benchmark over fixed seeds -> results/log.jsonl
-├── analysis/            # fees.py, orders.py: analysis of ended weeks (reveal + events)
+├── analysis/            # fees.py, orders.py, market.py: analysis of ended weeks (reveal + events)
 ├── results/log.jsonl    # Log of every benchmark run
 ├── docs/                # Official docs (RULES, HANDBOOK, API, ...) + our summaries
 ├── tests/               # Offline unit tests: pricing rules, fees, config
@@ -111,7 +112,7 @@ junction-2026/
 
 - [x] Starter split into our modules (identical results), benchmark harness, analysis scripts.
 - [x] Level 1 profitable: fee ladder (+€3,419/week vs −€2,898 for the starter).
-- [x] **Level 8 profitable and ranked on 30/30 test weeks** (+€9,909/week); practice ranking 11/25.
+- [x] **Level 8 profitable and ranked on 30/30 test weeks** (+€9,909/week); practice round "Saturday 00:00": 43/62.
 - [ ] Test the live final loop in a test final (Sat 14:00 / 20:00).
 - [ ] Level 8: dealer trust, handling after `deadline_close`, price-war day.
 - [ ] Final (Sun 08:00), then submission by Sun 10:00 (hash, code link, 5–10 slides).

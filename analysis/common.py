@@ -32,10 +32,14 @@ def client() -> Client:
 
 def fetch(c: Client, wid: str) -> dict:
     path = os.path.join(RAW, f"{wid}.json")
-    if os.path.exists(path):
-        return json.load(open(path))
     w = c.world(wid)
-    data = {"events": w.events(), "reveal": w.reveal(), "snapshot": w.snapshot()}
+    if os.path.exists(path):
+        data = json.load(open(path))
+        if "roster" in data:
+            return data
+        data["roster"] = w.roster()  # older cache files have no driver list
+    else:
+        data = {"events": w.events(), "reveal": w.reveal(), "snapshot": w.snapshot(), "roster": w.roster()}
     os.makedirs(RAW, exist_ok=True)
     json.dump(data, open(path, "w"))
     return data

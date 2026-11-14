@@ -5,6 +5,7 @@ quote"), so we must still quote to win anything. Real pricing starts at level 4.
 """
 from __future__ import annotations
 
+import zlib
 from typing import Optional
 
 from spread.types import PriceRequest
@@ -17,17 +18,28 @@ DECLINE_MULT = 10.0  # a quote this far above list never wins and costs nothing 
 
 
 def quote(request: PriceRequest, level: int, params: Params, km: float = 0.0, backlog: int = 0, drive_min: int = 0,
-          trust: int = 0) -> Optional[dict]:
+          trust: int = 0, near: Optional[int] = None) -> Optional[dict]:
     """The prices to quote per option, or None to send no quote. `km` = road km of the first leg,
-    `backlog` = our won orders that still have no driver, `trust` = the dealer's count of our on-time orders (level 8).
+    `backlog` = our won orders that still have no driver, `trust` = the dealer's count of our on-time orders (level 8),
+    `near` = drivers living within 30 km of the pickup (None = unknown).
     Default (quote_mult=1.0, decline_km=0): list price of the first option, as the starter."""
     first = request["options"][0]
     mult = 1.0
     if level >= 4:
         mult = params.quote_mult + params.backlog_k * backlog
+        if params.explore_hi:  # research: a random price per request, to measure how the win chance falls with price
+            u = zlib.crc32(request["id"].encode()) % 10000 / 10000
+            mult = params.explore_lo + (params.explore_hi - params.explore_lo) * u
+        if params.private_add and any(leg[s]["privateAddress"] for leg in request["legs"] for s in ("pickup", "delivery")):
+            mult += params.private_add
+        if near is not None:
+            if params.dense_n and near >= params.dense_n:
+                mult -= params.dense_cut
+            if params.sparse_n and near < params.sparse_n:
+                mult += params.sparse_add
         if level >= 8 and params.trust_w:
             mult *= 1 + params.trust_w * 0.01 * min(trust, TRUST_CAP)
-        if params.decline_km and km > params.decline_km:
+        if params.decline_km and km > params.decline_km or mult >= DECLINE_MULT / 2:
             mult = DECLINE_MULT
     if level >= 4 and params.min_slack_h and mult < DECLINE_MULT:
         # Offer every option that leaves time to find a driver; the dealer picks. None left: decline.

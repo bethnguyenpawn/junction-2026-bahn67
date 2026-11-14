@@ -61,6 +61,19 @@ class Pricing(unittest.TestCase):
         self.assertEqual(pricing.quote(request([SAME]), 8, p, trust=10), {"same_day": 11000})
         self.assertEqual(pricing.quote(request([SAME]), 8, p, trust=99), {"same_day": 12500})
 
+    def test_drivers_near_pickup_move_the_price(self):
+        p = Params(quote_mult=1.5, dense_n=40, dense_cut=0.2, sparse_n=5, sparse_add=0.1)
+        self.assertEqual(pricing.quote(request([SAME]), 8, p, near=40), {"same_day": 13000})
+        self.assertEqual(pricing.quote(request([SAME]), 8, p, near=10), {"same_day": 15000})
+        self.assertEqual(pricing.quote(request([SAME]), 8, p, near=4), {"same_day": 16000})
+        self.assertEqual(pricing.quote(request([SAME]), 8, p), {"same_day": 15000})  # unknown: no change
+
+    def test_private_address_surcharge_and_decline(self):
+        r = request([SAME])
+        r["legs"] = [{"pickup": {"privateAddress": True}, "delivery": {"privateAddress": False}}]
+        self.assertEqual(pricing.quote(r, 8, Params(quote_mult=1.5, private_add=0.2)), {"same_day": 17000})
+        self.assertEqual(pricing.quote(r, 8, Params(quote_mult=1.5, private_add=9)), {"same_day": 100000})
+
     def test_prices_are_whole_cents(self):
         q = pricing.quote(request([("same_day", 20 * 60, 3333)]), 8, Params(quote_mult=1.37))
         self.assertIsInstance(q["same_day"], int)
@@ -91,7 +104,7 @@ class Config(unittest.TestCase):
             from_overrides(["nope=1"])
 
     def test_presets_exist(self):
-        self.assertEqual(set(config.PRESETS), {"starter", "l1", "l8", "l8_v1"})
+        self.assertEqual(set(config.PRESETS), {"starter", "l1", "l8", "l8b", "l8_v1"})
         self.assertIs(PRESETS["starter"], DEFAULT)
 
 
