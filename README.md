@@ -67,14 +67,20 @@ We use the official `spread` Python kit. It sends HTTPS + JSON to `https://sprea
 
 ## 🚀 Getting started
 
-Requirements: Python 3.9 or later.
+Requirements: Python 3.9 or later, git.
 
 ```bash
+git clone git@github.com:bethnguyenpawn/junction-2026-bahn67.git
+cd junction-2026-bahn67
+git checkout otso/level1-baseline     # our working branch
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt     # installs the official Spread kit
+pip install -r requirements.txt     # installs the official Spread kit (+ numpy for analysis)
 cp .env.example .env                # then put the team key in .env (never commit it)
+python -m unittest discover -s tests   # check: 17 tests OK, no key needed
 ```
+
+**The team key:** ask a teammate for the `bahn67` key; don't create a new team at `/join` (that gives a different team). A wrong or placeholder key fails with "The server does not accept this key (HTTP 401)".
 
 ### Run
 
