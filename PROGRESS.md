@@ -35,7 +35,7 @@ Ranking round: run 5× `.venv/bin/python main.py --board --level 8 --preset l8` 
 - **Safety:** cheaper base prices and longer trips always look good on some weeks but leave a fresh week under 90%. Always check `l8x` and `l8y`.
 - **Dealer trust drives volume:** at the same price we win 36% of a dealer's requests at trust 0–4 and 82% at trust 25. One dealer sends 1/3 of all requests; each late order halves its trust.
 - **Lanes:** the competitor's price depends on where the car goes, the same in every world (HANDBOOK). Fitted from 19,450 random-price quotes: −0.17× list for Vantaa up to +0.18× for Joensuu/Ylivieska (`lanes.json`, `analysis/lanes.py`). Using it: +4.1% over 30 weeks.
-- **Expected-profit pricing** (`opt`, fitted win and lateness models): with a full lateness penalty and trade-ins declined it is safe (worst 91.4%), but only +€2.4k over 20 weeks vs `l8`: not worth switching (Exp. 29). Pricing low to build dealer trust loses money (Exp. 29). Learning the week's price level from wins/losses: +1.3% but a fresh week at 90.6% (Exp. 31).
+- **Expected-profit pricing** (`opt`, fitted win and lateness models): with a full lateness penalty and trade-ins declined it is safe (worst 91.4%), but only +€2.4k over 20 weeks vs `l8`: not worth switching (Exp. 29). Pricing low to build dealer trust loses money (Exp. 29). Learning the week's price level from wins/losses: +1.3% but a fresh week at 90.6% (Exp. 31). Return-trip offers to drivers who just delivered for us: 1–3 of 41–104 accepted (Exp. 33).
 - **Tried, no gain** (code kept, off): dealer-trust pricing, prices per delivery option, flat fees, other fee caps, fee level per car, direct offers to drivers near the delivery town, two-car gigs, win-rate steering, price by our cost, higher fees or stricter filters for trusted dealers, lower prices for big dealers.
 
 ## Code
@@ -53,8 +53,7 @@ Ranking round: run 5× `.venv/bin/python main.py --board --level 8 --preset l8` 
 ## Next (in priority order)
 
 1. **Test final today 14:00 (and 20:00):** start `.venv/bin/python main.py --final --preset l8` before 14:00. Check it keeps up with the clock and that the score looks like a practice week.
-2. **Cheaper drivers:** offers to drivers who just finished our gigs nearby.
-3. **Price-war day** (competitor −20% for one unannounced day) and the outage region (competitor down, +30% prices).
+2. **Price-war day** (competitor −20% for one unannounced day) and the outage region (competitor down, +30% prices).
 
 ## Deadlines
 

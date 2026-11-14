@@ -22,7 +22,7 @@ from spread.types import Score
 
 import config
 from config import DAY, Params
-from dispatch import WAKE_ON, Desk, drivers_near, places_of, roads_of
+from dispatch import Desk, drivers_near, places_of, roads_of, wake_on
 
 WEEKDAYS = [
     "Monday",
@@ -49,7 +49,7 @@ def load_env(
 
 def load_near(world: World, params: Params) -> dict | None:
     """Drivers living near each place, from the world's driver list; only when a rule uses it (one extra read)."""
-    if not (params.dense_n or params.sparse_n or params.offer_mult):
+    if not (params.dense_n or params.sparse_n or params.offer_mult or params.return_mult):
         return None
     return drivers_near(world.roster(), places_of(world.client))
 
@@ -73,7 +73,7 @@ def play_practice(world: World, level: int, params: Params, verbose: bool = True
         stop_at = min(ends_at, midnight)
         if params.ladder_per_hour > 0:
             stop_at = min(stop_at, desk.now + params.tick_min)
-        step = world.advance(until=WAKE_ON, max=stop_at, actions=actions)
+        step = world.advance(until=wake_on(params), max=stop_at, actions=actions)
         desk.read_results(actions, step["results"])
         desk.now = step["now"]
         for event in step["events"]:

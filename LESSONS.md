@@ -489,3 +489,15 @@ Played `l8-a` to Wednesday 12:00, threw the desk away, rebuilt it with `Desk.rej
 
 - **Weekday in the win model** (random-price quotes, fit on seeds a–e, test on f–j): log loss on other worlds gets *worse* (0.436 → 0.454). The competitor's day factor is new in every world (HANDBOOK), so a weekday table would fit noise.
 - **Monday only** (`monday_add`, off): −0.2× → €96,361 on l8 (vs €99,661); +0.2× → €98,884. Cheaper Mondays don't build enough trust to pay; dearer ones lose the few Monday wins. Monday price doesn't matter.
+
+## Experiment 33: return-trip offers ✗
+
+- **Idea** (HANDBOOK: an offer "reaches a driver who finishes one of your gigs far from home"): when a driver delivers our car, offer them directly our open gig that starts within `return_km` of there and ends nearer their home (`return_mult` × the app's current fee; `Desk.offer_return`). Off by default.
+
+| On l8-a | Offers | Accepted | Declined | Expired (unread) | Margin |
+|---|---|---|---|---|---|
+| off (`l8`) | | | | | €13,272 |
+| fee 1.0×, ≤ 60 km | 41 | **3** | 18 | 19 | €12,769 |
+| fee 1.1×, ≤ 150 km | 104 | **1** | 52 | 48 | €13,140 |
+
+- **Lesson:** drivers who have just delivered don't take a second gig from us: half don't read the offer, half say no, even above the app's fee. Same as Exp. 18: direct offers don't work in this world for us. Not benchmarked further.

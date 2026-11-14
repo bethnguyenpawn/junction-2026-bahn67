@@ -88,6 +88,11 @@ WAKE_ON = [
 ]
 
 
+def wake_on(params: Params) -> list[str]:
+    """The events the practice loop stops at; return-trip offers also need each delivery."""
+    return WAKE_ON + ["delivered"] if params.return_mult else WAKE_ON
+
+
 # --- fee schedules: the main decision at levels 1-2 -------------------------------------------
 
 
@@ -139,6 +144,9 @@ class Desk:
         self.world, self.level, self.now, self.p = world, level, now, params
         self.roads = roads or {}  # (from place, to place) -> {"km", "minutes"}
         self.near = near or {}  # place id -> drivers living within 30 km (empty = not loaded)
+        self.drivers = {d["id"]: d for ds in self.near.values() for d in ds}  # driver id -> profile
+        self.driver_of: dict[str, str] = {}  # gig id -> the driver who booked it
+        self.offers_open: dict[str, list[int]] = {}  # gig id -> minutes we sent direct offers for it
         self.adapt = 0.0  # price adjustment steered by our recent win rate (Params.adapt_*)
         self.priced: set[str] = set()  # requests we quoted to win (not declined)
         self.market = 0.0  # learned competitor price level this week, x list (Params.market_lr)
@@ -219,16 +227,19 @@ class Desk:
             self.raise_fees(event["orderId"])
         elif kind == "gig_booked":
             self.booked.add(event["gigId"])
+            self.driver_of[event["gigId"]] = event["driverId"]
         elif kind in ("gig_dropped", "no_show"):
             self.booked.discard(event["gigId"])
         elif kind == "delivered":
             self.delivered(event["orderId"], event["leg"], event["at"])
+            self.offer_return(event["gigId"], event["orderId"], event["leg"], event["placeId"])
         elif kind == "ledger":
             self.on_ledger(event["line"])
         elif kind == "gig_viewed":
             self.last_seen[event["driverId"]] = event["at"]
         elif kind == "offer_answered" and event["answer"] == "accepted":
             self.booked.add(event["gigId"])
+            self.driver_of[event["gigId"]] = event["driverId"]
 
     def on_ledger(self, line: dict) -> None:
         """Dealer trust from our own account (RULES): a revenue line without a late refund is an order on
@@ -578,9 +589,7 @@ class Desk:
         fits = [
             d
             for d in self.near.get(place, [])
-            if (not audience.get("experienced") or (d["rating"] >= 4.8 and d["completedGigs"] >= 50))
-            and (not audience.get("manualLicence") or d["licence"] == "manual")
-            and self.offers_sent.get((d["id"], day), 0) < 3
+            if self.fits(d, audience) and self.offers_sent.get((d["id"], day), 0) < 3
         ]
         # Drivers who looked at our gigs today work today; the rest read few offers.
         fits.sort(
@@ -593,6 +602,67 @@ class Desk:
         for d in fits[: self.p.offer_n]:
             self.offers_sent[(d["id"], day)] = self.offers_sent.get((d["id"], day), 0) + 1
             self.outbox.append({"type": "offer", "gigId": gig_id, "driverId": d["id"], "feeCents": fee})
+
+    def offer_return(self, gig_id: str, order_id: str, leg: int, place: str) -> None:
+        """After a driver's last delivery in one of our gigs, offers them our open gig that starts within return_km
+        of here and ends nearest their home, if nearer than here: the trip home pays them, so they take less."""
+        p, action, driver = self.p, self.posts.get(gig_id), self.drivers.get(self.driver_of.get(gig_id, ""))
+        if not p.return_mult or action is None or driver is None:
+            return
+        last = action["stops"][-1]
+        if (last["orderId"], last["leg"]) != (order_id, leg):
+            return  # the driver has more stops in this gig
+        day = self.now // DAY
+        if self.offers_sent.get((driver["id"], day), 0) >= 3:  # RULES: at most three offers per driver per day
+            return
+        home, best = driver["homePlaceId"], None
+        for other_id, other in self.posts.items():
+            if other_id in self.booked or not self.is_live(other_id):
+                continue
+            if len([t for t in self.offers_open.get(other_id, []) if t > self.now - 10]) >= 3:
+                continue  # RULES: at most three open offers per gig
+            if not self.fits(driver, other["audience"]):
+                continue
+            first, final = other["stops"][0], other["stops"][-1]
+            pickup = self.orders[first["orderId"]]["legs"][first["leg"]]["pickup"]["placeId"]
+            delivery = self.orders[final["orderId"]]["legs"][final["leg"]]["delivery"]["placeId"]
+            to_pickup, to_home = self.km(place, pickup), self.km(delivery, home)
+            if to_pickup <= p.return_km and to_home < self.km(place, home) and (best is None or to_home < best[0]):
+                best = (to_home, other_id, other)
+        if best is None:
+            return
+        _, other_id, other = best
+        fee = max(1, int(current_fee(other["schedule"], self.now) * p.return_mult + 0.5))
+        self.offers_sent[(driver["id"], day)] = self.offers_sent.get((driver["id"], day), 0) + 1
+        self.offers_open.setdefault(other_id, []).append(self.now)
+        self.outbox.append({"type": "offer", "gigId": other_id, "driverId": driver["id"], "feeCents": fee})
+
+    def is_live(self, gig_id: str) -> bool:
+        """True while the gig still carries one of its legs (not replaced by a repost, not withdrawn)."""
+        return any(
+            s["orderId"] in self.orders and self.leg_gigs.get(s["orderId"], {}).get(s["leg"]) == gig_id
+            for s in self.posts[gig_id]["stops"]
+        )
+
+    @staticmethod
+    def fits(driver: DriverProfile, audience: Audience) -> bool:
+        """The gig's audience rules (RULES: experienced = rating >= 4.8 and >= 50 gigs)."""
+        return (not audience.get("experienced") or (driver["rating"] >= 4.8 and driver["completedGigs"] >= 50)) and (
+            not audience.get("manualLicence") or driver["licence"] == "manual"
+        )
+
+    def km(self, a: str, b: str) -> float:
+        road = self.roads.get((a, b))
+        return road["km"] if road else float("inf")
+
+
+def current_fee(schedule: list[FeeStep], now: int) -> int:
+    """The fee a schedule shows at minute now (its first step before it starts)."""
+    fee = schedule[0]["feeCents"]
+    for step in schedule:
+        if step["at"] <= now:
+            fee = step["feeCents"]
+    return fee
 
 
 def retry_from(order: Order, request: PriceRequest, leg: int, now: int) -> int:

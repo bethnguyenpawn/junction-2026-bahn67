@@ -19,17 +19,8 @@ class Params:
     dense_cut: float = 0.0  # ... - dense_cut
     private_add: float = 0.0  # + this when a stop is a private address (>= 5 = decline)
     dest_k: float = 0.0  # + dest_k x the delivery place's competitor price offset (lanes.json, x list)
-    monday_add: float = 0.0  # + this on Monday (negative = cheaper: the competitor starts the week cheap)
-    market_lr: float = (
-        0.0  # learn the week's competitor price level: + this x (won - expected) per answered quote (0 = off)
-    )
-    market_lo: float = -0.2  # limits of the learned level, x list
-    market_hi: float = 0.3
     decline_km: float = 0.0  # decline (quote 10x list) when the first leg is longer
-    min_slack_h: float = (
-        0.0  # quote only options with deadline - drive - now >= this many hours (0 = first option only)
-    )
-    max_legs: int = 0  # decline requests with more legs (trade-ins have 2); 0 = off
+    min_slack_h: float = 0.0  # quote only options with >= this many hours slack (0 = first option only)
 
     # --- Expected-profit pricing (levels 4+; 0 = off): quote the price that maximises
     # P(win | price, situation) x (price - expected cost). P is a logistic model fitted by analysis/winmodel.py.
@@ -53,9 +44,7 @@ class Params:
     opt_backlog: float = 0.03  # + this x typical fee per won order still without a driver (shadow price of capacity)
     opt_late_refund: float = 0.5  # share of the price lost when late (refund, ranking risk)
     opt_late_trust: float = 0.0  # value of a full-trust dealer's trust lost when late, x list price
-    opt_trust_gain: float = (
-        0.0  # value of +1 dealer trust, x list per request we expect from that dealer later this week
-    )
+    opt_trust_gain: float = 0.0  # Exp. 29: value of +1 trust, x list per later request of that dealer
     opt_lo: float = 1.0  # price range searched, x list
     opt_hi: float = 2.0
 
@@ -109,6 +98,13 @@ class Params:
     adapt_backlog: int = 5  # only lower the price while at most this many won orders lack a driver
     cost_k: float = 0.0  # Exp. 26: + cost_k x (typical fee / list - cost_mid)
     cost_mid: float = 0.9
+    max_legs: int = 0  # Exp. 29: decline requests with more legs (trade-ins have 2)
+    market_lr: float = 0.0  # Exp. 31: learn the week's competitor level: + this x (won - expected) per answer
+    market_lo: float = -0.2  # limits of the learned level, x list
+    market_hi: float = 0.3
+    monday_add: float = 0.0  # Exp. 32: + this on Monday
+    return_mult: float = 0.0  # Exp. 33: after a delivery, offer the driver our open gig towards home at this x fee
+    return_km: float = 60.0  # ... if its first pickup is within this many road km
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -165,9 +161,7 @@ PRESETS = {
 
 def from_overrides(overrides: list[str], base: Params = DEFAULT) -> Params:
     """Parses ["open_mult=0.8", "raise_steps=4"] into a Params, with types from the defaults."""
-    types = {
-        f.name: type(getattr(DEFAULT, f.name)) for f in fields(Params)
-    }  # types from the field defaults, not the preset
+    types = {f.name: type(getattr(DEFAULT, f.name)) for f in fields(Params)}  # from the defaults, not the preset
     changes = {}
     for item in overrides:
         key, _, value = item.partition("=")
