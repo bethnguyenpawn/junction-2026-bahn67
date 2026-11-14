@@ -18,13 +18,15 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from spread.client import Client, SpreadError
+from spread.client import Client, SpreadError, World
 
 import config
 from main import load_env, play_practice
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 MAX_PARALLEL = 4  # half of the team limit (8): the other 4 slots are for teammates
+SLOT_RETRY_SECONDS = 10
+MAX_SLOT_WAIT_SECONDS = 300
 
 
 def git_commit() -> str:
@@ -41,9 +43,27 @@ def git_commit() -> str:
         return "unknown"
 
 
+def create_practice_world(client: Client, level: int, seed: str) -> World:
+    """Wait for a team practice slot instead of dropping a seed when teammates fill the pool."""
+    started = time.monotonic()
+    while True:
+        try:
+            return client.create(level=level, seed=seed)
+        except SpreadError as error:
+            # POST /worlds returns 409 when all eight unfinished team worlds are occupied.
+            # Any other conflict needs attention and must not be retried as a capacity error.
+            if error.status != 409:
+                raise
+            elapsed = time.monotonic() - started
+            if elapsed >= MAX_SLOT_WAIT_SECONDS:
+                raise TimeoutError(f"Timed out waiting for a practice slot for {seed}") from error
+            print(f"  {seed:<8} waiting for a practice slot", file=sys.stderr, flush=True)
+            time.sleep(min(SLOT_RETRY_SECONDS, MAX_SLOT_WAIT_SECONDS - elapsed))
+
+
 def run_seed(level: int, seed: str, params: config.Params) -> dict:
     client = Client()  # one connection per thread
-    world = client.create(level=level, seed=seed)
+    world = create_practice_world(client, level, seed)
     try:
         score = play_practice(world, level, params, verbose=False)
     except BaseException:

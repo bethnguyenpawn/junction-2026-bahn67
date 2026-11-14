@@ -78,6 +78,7 @@ class Params:
     hold_h: float = 8.0  # hold an order only with >= this many hours until its latest pickup
     wait_h: float = 0.0  # an unpaired held car waits for the next plan only with >= this many hours spare (0 = hold_h)
     split_after_min: int = 0  # a two-car gig no driver booked within this many minutes goes back to one gig per car
+    pair_match: int = 0  # use maximum-cardinality matching instead of greedy pairing in each batch plan
     # (uses pair_fee, pair_km, pair_lead_min, pair_margin_h below)
 
     # --- Normal driver fee schedule, as multiples of the request's typical fee (referenceFeeCents).
@@ -199,6 +200,9 @@ PRESETS = {
     # Previous level-8 preset (practice round "Saturday 00:00": €46,496, rank 43/62): +€79,155 / +€82,446.
     "l8_v1": Params(quote_mult=1.6, backlog_k=0.01, decline_km=500, min_slack_h=8, open_mult=0.8),
 }
+
+# Experimental l8_plan matcher: prefer the largest set of simultaneously feasible pairs.
+PRESETS["l8_plan_match"] = replace(PRESETS["l8_plan"], pair_match=1)
 
 # Experimental expected-profit pricing, based on the current lane-aware l8 quote. Use only for low-risk requests;
 # preserve the proven delivery-place, distance, deadline and driver fee rules through the flat-price fallback.

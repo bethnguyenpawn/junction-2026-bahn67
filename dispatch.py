@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections import deque
 from typing import NamedTuple
 
 from spread.client import World
@@ -126,6 +127,108 @@ class Retry(NamedTuple):
     pickup_from: int = 0
     manual_licence: bool = False
     plates: bool = False
+
+
+def maximum_cardinality_matching(adjacency: list[list[int]]) -> list[tuple[int, int]]:
+    """Return a maximum set of disjoint edges in an undirected graph (Edmonds blossom).
+
+    The input neighbor order is retained for deterministic tie-breaking between equally large
+    matchings. Invalid indexes and self-edges are ignored.
+    """
+    n = len(adjacency)
+    graph: list[list[int]] = [[] for _ in range(n)]
+    for v, neighbors in enumerate(adjacency):
+        for u in neighbors:
+            if not 0 <= u < n or u == v:
+                continue
+            if u not in graph[v]:
+                graph[v].append(u)
+            if v not in graph[u]:
+                graph[u].append(v)
+
+    match = [-1] * n
+
+    def lowest_common_ancestor(a: int, b: int, parent: list[int], base: list[int]) -> int:
+        path = [False] * n
+        while True:
+            a = base[a]
+            path[a] = True
+            if match[a] == -1:
+                break
+            a = parent[match[a]]
+        while True:
+            b = base[b]
+            if path[b]:
+                return b
+            b = parent[match[b]]
+
+    def mark_blossom_path(
+        v: int,
+        blossom_base: int,
+        child: int,
+        blossom: list[bool],
+        parent: list[int],
+        base: list[int],
+    ) -> None:
+        while base[v] != blossom_base:
+            mate = match[v]
+            if mate == -1:
+                return
+            blossom[base[v]] = True
+            blossom[base[mate]] = True
+            parent[v] = child
+            child = mate
+            v = parent[mate]
+
+    def augment_from(root: int) -> bool:
+        parent = [-1] * n
+        base = list(range(n))
+        used = [False] * n
+        queue = deque([root])
+        used[root] = True
+        endpoint = -1
+
+        while queue and endpoint == -1:
+            v = queue.popleft()
+            for u in graph[v]:
+                if base[v] == base[u] or match[v] == u:
+                    continue
+                if u == root or (match[u] != -1 and parent[match[u]] != -1):
+                    blossom_base = lowest_common_ancestor(v, u, parent, base)
+                    blossom = [False] * n
+                    mark_blossom_path(v, blossom_base, u, blossom, parent, base)
+                    mark_blossom_path(u, blossom_base, v, blossom, parent, base)
+                    for i in range(n):
+                        if blossom[base[i]]:
+                            base[i] = blossom_base
+                            if not used[i]:
+                                used[i] = True
+                                queue.append(i)
+                elif parent[u] == -1:
+                    parent[u] = v
+                    if match[u] == -1:
+                        endpoint = u
+                        break
+                    mate = match[u]
+                    used[mate] = True
+                    queue.append(mate)
+
+        if endpoint == -1:
+            return False
+        v = endpoint
+        while v != -1:
+            previous = parent[v]
+            next_v = match[previous] if previous != -1 else -1
+            match[v] = previous
+            if previous != -1:
+                match[previous] = v
+            v = next_v
+        return True
+
+    for root in range(n):
+        if match[root] == -1:
+            augment_from(root)
+    return [(v, mate) for v, mate in enumerate(match) if v < mate]
 
 
 class Desk:
@@ -373,23 +476,60 @@ class Desk:
         self.next_plan = next_plan_at(self.now, p.plan_every_h)
         stops_of = {oid: self.single_stops(oid) for oid in self.held if oid in self.orders}
         held = {oid: stops for oid, stops in stops_of.items() if stops is not None}
-        options = []
-        for a, first in held.items():
-            for b, second in held.items():
-                if a == b:
-                    continue
-                link = self.chain_minutes(first, second)
-                if link is None:
-                    continue
-                home = self.km(
-                    self.orders[b]["legs"][0]["delivery"]["placeId"], self.orders[a]["legs"][0]["pickup"]["placeId"]
-                )
-                options.append((home > p.pair_km, link, a, b, first + second))
         paired: set[str] = set()
-        for _, _, a, b, stops in sorted(options, key=lambda o: o[:2]):
-            if a not in paired and b not in paired:
-                paired |= {a, b}
+        if p.pair_match:
+            held_ids = list(held)
+            neighbors: list[list[tuple[tuple, int]]] = [[] for _ in held_ids]
+            edge_options: dict[tuple[int, int], tuple[tuple, str, str, list[StopRef]]] = {}
+            for i, a in enumerate(held_ids):
+                for j in range(i + 1, len(held_ids)):
+                    b = held_ids[j]
+                    choices = []
+                    for first_id, second_id in ((a, b), (b, a)):
+                        first, second = held[first_id], held[second_id]
+                        link = self.chain_minutes(first, second)
+                        if link is None:
+                            continue
+                        home = self.km(
+                            self.orders[second_id]["legs"][0]["delivery"]["placeId"],
+                            self.orders[first_id]["legs"][0]["pickup"]["placeId"],
+                        )
+                        priority = (home > p.pair_km, link, first_id, second_id)
+                        choices.append((priority, first_id, second_id, first + second))
+                    if choices:
+                        best = min(choices, key=lambda option: option[0])
+                        edge_options[(i, j)] = best
+                        neighbors[i].append((best[0], j))
+                        neighbors[j].append((best[0], i))
+
+            adjacency = [
+                [neighbor for _, neighbor in sorted(row, key=lambda item: (item[0], item[1]))]
+                for row in neighbors
+            ]
+            selected = []
+            for i, j in maximum_cardinality_matching(adjacency):
+                selected.append(edge_options[(i, j)])
+            for _, a, b, stops in sorted(selected, key=lambda option: option[0]):
+                paired.update((a, b))
                 self.post_pair(stops, (a, b))
+        else:
+            options = []
+            for a, first in held.items():
+                for b, second in held.items():
+                    if a == b:
+                        continue
+                    link = self.chain_minutes(first, second)
+                    if link is None:
+                        continue
+                    home = self.km(
+                        self.orders[b]["legs"][0]["delivery"]["placeId"],
+                        self.orders[a]["legs"][0]["pickup"]["placeId"],
+                    )
+                    options.append((home > p.pair_km, link, a, b, first + second))
+            for _, _, a, b, stops in sorted(options, key=lambda option: option[:2]):
+                if a not in paired and b not in paired:
+                    paired |= {a, b}
+                    self.post_pair(stops, (a, b))
         for oid in list(self.held):
             order = self.orders.get(oid)
             if order is None:

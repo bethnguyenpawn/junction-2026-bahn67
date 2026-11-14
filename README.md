@@ -34,7 +34,7 @@ Open `.env` and replace `put-your-team-key-here` with the `bahn67` key; ask a te
 **3. Check it works**
 
 ```bash
-python -m unittest discover -s tests                 # 25 tests OK (no key needed)
+python -m unittest discover -s tests                 # 28 tests OK (no key needed)
 python main.py --level 8 --seed l8-a --preset l8     # plays one practice week, ~1 min
 ```
 
@@ -52,8 +52,8 @@ python main.py --board --level 8 --preset l8_plan                       # rankin
 python main.py --final --preset l8_plan                                  # the final (live clock)
 ```
 
-- **Presets** (`config.py`): **`l8_plan` is the current best**, used for ranking runs and the final. `l8` is the same without batch planning, `l8_guarded` is an experiment that was not adopted (Exp. 38), `starter` = the official starter, and the `l8_v*` presets are older versions. `--set name=value` changes any parameter.
-- **Test weeks:** tune on the `l8-a..j` weeks, confirm on `l8x`, and use `l8y` only as a final check. Each `evaluate.py` run is logged in `results/log.jsonl`.
+- **Presets** (`config.py`): **`l8_plan` is the current best**, used for ranking runs and the final. `l8_plan_match` is an unbenchmarked experimental variant that uses maximum-cardinality matching for feasible two-car pairs; do not adopt it until matched results support it. `l8` is the same without batch planning, `l8_guarded` is an experiment that was not adopted (Exp. 38), `starter` = the official starter, and the `l8_v*` presets are older versions. `--set name=value` changes any parameter.
+- **Test weeks:** tune on the `l8-a..j` weeks, confirm on `l8x`, and use `l8y` only as a final check. Each `evaluate.py` run is logged in `results/log.jsonl`; it waits up to five minutes when all team practice slots are occupied.
 - **Ranking runs** (`--board`) only when the team agrees: 5 per round, and they can't be undone.
 
 ## Files

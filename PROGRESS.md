@@ -21,6 +21,8 @@ Status, what we learned, and what's next. Every experiment with its numbers: [LE
 
 **Gap:** the top 10 win ~430–470 orders/week at €40–43 each; we win 373 at €38. We need ≈ +€3,300/week. Our worst on-time week is 94.9% (90% needed), so we can afford to win more.
 
+**Experimental matching candidate:** `l8_plan_match` uses maximum-cardinality matching over the same deadline- and route-feasible pair edges; current round-trip and short-link preferences guide ties. Offline tests pass, including exhaustive comparison on all undirected graphs up to six nodes. The fresh `l8fresh14` baseline attempt completed only 3/10 weeks (€35,312.53 total, 95.76% weighted on-time, 93.77% worst, 3/3 ranked) before practice capacity filled. A one-seed candidate pilot then waited 327 seconds and timed out with all eight slots occupied; it created no world. The candidate remains unbenchmarked; keep `l8_plan` as best. `evaluate.py` now retries slot-full responses for up to five minutes. Continue the matched test when slots are available.
+
 Ranking round: one person runs `for i in 1 2 3 4 5; do .venv/bin/python main.py --board --level 8 --preset l8_plan || break; done` (only one ranking run per team at a time; a second one gets HTTP 409).
 
 ## The level-8 system (`--preset l8_plan`)

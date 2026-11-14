@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config  # noqa: E402
 import pricing  # noqa: E402
 from config import DAY, DEFAULT, HOUR, PRESETS, Params, from_overrides  # noqa: E402
-from dispatch import Desk, fee_schedule, next_plan_at, steep_schedule  # noqa: E402
+from dispatch import Desk, fee_schedule, maximum_cardinality_matching, next_plan_at, steep_schedule  # noqa: E402
 
 NOON = 12 * 60  # Monday 12:00
 
@@ -141,6 +141,50 @@ class Plan(unittest.TestCase):
         self.assertEqual(next_plan_at(18 * HOUR, 3), 19 * HOUR)
         self.assertEqual(next_plan_at(19 * HOUR, 3), DAY + 7 * HOUR)  # after 19:00 -> next day 07:00
 
+    def test_maximum_matching_does_not_strand_a_feasible_pair(self):
+        # The preferred edge 0-1 blocks the greedy matcher, while 0-2 and 1-3 form two pairs.
+        pairs = maximum_cardinality_matching([[1, 2], [0, 3], [0], [1]])
+        self.assertEqual(len(pairs), 2)
+        self.assertEqual({node for pair in pairs for node in pair}, {0, 1, 2, 3})
+
+    def test_maximum_matching_handles_odd_cycles(self):
+        # A triangle with one outside neighbor per vertex requires blossom contraction to match all six.
+        graph = [[1, 2, 3], [0, 2, 4], [0, 1, 5], [0], [1], [2]]
+        pairs = maximum_cardinality_matching(graph)
+        self.assertEqual(len(pairs), 3)
+        self.assertEqual(len({node for pair in pairs for node in pair}), 6)
+
+    def test_plan_match_finds_two_pairs_where_greedy_finds_one(self):
+        links = {("a", "b"): 1, ("a", "c"): 2, ("b", "d"): 2}
+
+        def run(preset):
+            desk = Desk(None, 8, 7 * HOUR, preset, roads={})
+            ids = ("a", "b", "c", "d")
+            desk.orders = {
+                oid: {
+                    "id": oid,
+                    "lastPickupAt": 5000,
+                    "legs": [{"pickup": {"placeId": oid}, "delivery": {"placeId": oid}}],
+                }
+                for oid in ids
+            }
+            desk.held = dict.fromkeys(ids)
+            desk.single_stops = lambda oid: [{"orderId": oid}]
+            desk.chain_minutes = lambda first, second: links.get((first[0]["orderId"], second[0]["orderId"]))
+            posted = []
+
+            def record_pair(stops, order_ids):
+                posted.append(order_ids)
+                for order_id in order_ids:
+                    desk.held.pop(order_id, None)
+
+            desk.post_pair = record_pair
+            desk.plan()
+            return posted
+
+        self.assertEqual(len(run(PRESETS["l8_plan"])), 1)
+        self.assertEqual(len(run(PRESETS["l8_plan_match"])), 2)
+
 
 class Config(unittest.TestCase):
     def test_overrides_use_field_types_not_preset_values(self):
@@ -155,9 +199,14 @@ class Config(unittest.TestCase):
 
     def test_presets_exist(self):
         self.assertEqual(
-            set(config.PRESETS), {"starter", "l1", "l8", "l8_plan", "l8_guarded", "l8_v3", "l8_v2", "l8_v1"}
+            set(config.PRESETS),
+            {"starter", "l1", "l8", "l8_plan", "l8_plan_match", "l8_guarded", "l8_v3", "l8_v2", "l8_v1"},
         )
         self.assertIs(PRESETS["starter"], DEFAULT)
+
+    def test_l8_plan_match_is_gated_and_keeps_the_l8_plan_parameters(self):
+        self.assertEqual(PRESETS["l8_plan"].pair_match, 0)
+        self.assertEqual(PRESETS["l8_plan_match"], from_overrides(["pair_match=1"], PRESETS["l8_plan"]))
 
     def test_l8_guarded_keeps_lane_price_and_reliability_filters(self):
         p = PRESETS["l8_guarded"]
