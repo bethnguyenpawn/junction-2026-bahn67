@@ -104,6 +104,8 @@ class Desk:
         self.booked: set[str] = set()  # gigs a driver holds now
         self.posts: dict[str, PostAction] = {}  # gig id -> the post that made it
         self.urgent: set[str] = set()  # orders whose deadline warning has come
+        self.trust: dict[str, int] = {}  # dealer id -> our on-time orders it counts (level 8 dealer trust)
+        self.trust_state: dict[str, str] = {}  # order id -> "counted" | "late"
         self.first_posted: dict[
             str, int
         ] = {}  # order id -> minute its first gig was posted
@@ -161,6 +163,9 @@ class Desk:
                     for stop in gig["stops"]
                 ):
                     self.retry(order["id"], event["leg"], event["reason"])
+        for event in history:
+            if event["kind"] == "ledger":
+                self.on_ledger(event["line"])
         for request in snapshot["openRequests"]:
             self.quote(request)
 
@@ -187,6 +192,24 @@ class Desk:
             self.booked.discard(event["gigId"])
         elif kind == "delivered":
             self.delivered(event["orderId"], event["leg"], event["at"])
+        elif kind == "ledger":
+            self.on_ledger(event["line"])
+
+    def on_ledger(self, line: dict) -> None:
+        """Dealer trust from our own account (RULES): a revenue line without a late refund is an order on
+        time (+1 for its dealer, max 25); a late or undelivered order halves that dealer's count."""
+        order_id = line.get("orderId")
+        request = self.requests.get(order_id or "")
+        if request is None:
+            return
+        dealer, state = request["dealerId"], self.trust_state.get(order_id)
+        if line["kind"] == "revenue" and state is None:
+            self.trust[dealer] = min(pricing.TRUST_CAP, self.trust.get(dealer, 0) + 1)
+            self.trust_state[order_id] = "counted"
+        elif line["kind"] in ("late_refund", "undelivered_penalty") and state != "late":
+            count = self.trust.get(dealer, 0) - (1 if state == "counted" else 0)
+            self.trust[dealer] = max(0, count) // 2
+            self.trust_state[order_id] = "late"
 
     def delivered(self, order_id: str, leg: int, at: int) -> None:
         self.leg_gigs.get(order_id, {}).pop(leg, None)
@@ -198,7 +221,7 @@ class Desk:
         leg = request["legs"][0]
         road = self.roads.get((leg["pickup"]["placeId"], leg["delivery"]["placeId"]))
         prices = pricing.quote(request, self.level, self.p, road["km"] if road else 0.0, self.backlog(),
-                               road["minutes"] if road else 0)
+                               road["minutes"] if road else 0, self.trust.get(request["dealerId"], 0))
         if prices:
             self.outbox.append(
                 {"type": "quote", "requestId": request["id"], "prices": prices}

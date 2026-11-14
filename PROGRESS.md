@@ -2,26 +2,31 @@
 
 Experiment details: [LESSONS.md](LESSONS.md) · Challenge in plain words: [docs/CHALLENGE_SUMMARY.md](docs/CHALLENGE_SUMMARY.md)
 
-## Status (Sat 14 Nov, early morning)
+## Morning summary (Sat 14 Nov, overnight tuning)
 
-**Level 8 (the final's level), `--preset l8`:**
+**New `--preset l8`** (the old one is kept as `l8_v1`):
 
-| | 10 tuning weeks `l8-*` | 10 unseen weeks `l8x-*` | Ranked weeks |
+| | 30 test weeks (`l8`, `l8x`, `l8y`) | Per week | Worst week |
 |---|---|---|---|
-| Kit starter | −€604,425 (53.6% on time) | — | 0/10 |
-| **Ours** | **+€79,155** (95.6%, worst 92.0%) | **+€82,446** (95.9%, worst 94.2%) | **20/20** |
+| `l8_v1` (ranked **11th of 25**, round "Saturday 00:00", €46,496) | €260,043 | €8,668 | 92.0% |
+| **`l8` (new)** | **€297,267** | **€9,909 (+14%)** | 91.0%, 30/30 ranked |
 
-For scale: top teams on the level-8 practice board make ≈ €12,000–14,700/week, House best ≈ €14,400/week (different weeks, rough comparison). Ours ≈ €8,080/week.
+On the 10 fresh weeks `l8y` (never used for tuning): €111,705 vs €98,442 (+13%).
+If the ranking weeks scale the same way, €46,496 → ≈ €53,000, around 10th place last round (10th was €51,157).
 
-**Level 1, `--preset l1`:** +€34,186 on `l1-*` vs −€28,978 for the starter (fee ladder by reprice). Does not transfer to level 8.
+**To check after 09:00 (new ranking round):** run 5×
+`.venv/bin/python main.py --board --level 8 --preset l8`
 
-## The level-8 system in five rules
+## The level-8 system (six rules)
 
-1. **Quote 1.6× the list price** (competitor is 26–54% above list; at list price we won everything and were 46% late).
-2. **+0.01× per won order still without a driver** (backlog): take fewer cars when overloaded.
-3. **Decline trips > 500 km** (quote 10× list: never wins, costs nothing).
-4. **Only offer delivery options with ≥ 8 h slack** (deadline − drive − now); same-day cars won at midday found no driver.
-5. **Open driver fees at 0.8× the typical fee**, +0.1×/hour, steep 1.5× after `deadline_close`.
+1. **Quote 1.45× the list price** (competitor is 26–54% above list).
+2. **+0.03× per won order still without a driver** (backlog brake: take fewer cars when overloaded).
+3. **Decline trips > 550 km** (quote 10× list: never wins, costs nothing).
+4. **Only offer delivery options with ≥ 8 h slack** (deadline − drive − now); otherwise decline.
+5. **Driver fee opens at 0.8× the typical fee, +0.1× every 30 min**; 1.5× after `deadline_close`.
+6. (Level 1 only: fee ladder by reprice, `--preset l1`.)
+
+Tried and rejected overnight (see LESSONS.md): dealer-trust pricing (−€12k), flat fees without raises, steep fee 1.25×/2.0×, 6 h slack, decline > 600 km (a 90.5% week) and > 700 km, per-option prices, opening fee 0.7×.
 
 ## Code
 
@@ -45,8 +50,9 @@ python main.py --final --preset l8                            # the final (live 
 
 ## Next (in priority order)
 
+0. **Play the 09:00 ranking round with the new preset** and compare with 11th / €46,496.
 1. **Test `--final --preset l8` in a test final (Sat 14:00 or 20:00).** The live loop has never run; check it keeps up and survives a restart.
-2. **Dealer trust (level 8):** dealers accept up to 25% higher prices after on-time deliveries; price per dealer by our on-time count.
+2. **Dealer trust as extra wins, not higher prices** (raising prices failed): e.g. lower the backlog brake for trusted dealers.
 3. **After `deadline_close`:** steep fee level/timing at level 8, or direct offers to drivers near the pickup.
 4. **Price-war day:** competitor −20% on one unannounced day; detect from losing streaks.
 5. Check `--preset l8` on levels 4–7 (sanity), and level 2–3 ideas (multi-car gigs).

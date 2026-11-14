@@ -17,9 +17,9 @@ Scripts load `.env` themselves (`main.load_env`). Use `.venv/bin/python`, not sy
 
 ## Code map
 
-- `main.py` — `play_practice` (advance loop, wakes on `dispatch.WAKE_ON` events, plus every `tick_min` when the ladder is on) and `play_final` (rebuild via `Desk.rejoin`, then WebSocket stream). No `--board` flag on purpose.
+- `main.py` — `play_practice` (advance loop, wakes on `dispatch.WAKE_ON` events, plus every `tick_min` when the ladder is on) and `play_final` (rebuild via `Desk.rejoin`, then WebSocket stream). `--board` creates a RANKING run: only the user runs it, never Claude without explicit OK.
 - `dispatch.py` — `Desk`: state + `handle(event)` → actions in `outbox`. Fee decisions: `fee_schedule`, `steep_schedule`, `fees_for`, `ladder_mult`, `tick` (reprices unbooked non-urgent gigs upward). Note reader `window_from_note`.
-- `pricing.py` — `quote()`: levels 1–3 list price (**no quote = declined**). Levels 4+: list × (`quote_mult` + `backlog_k` × backlog), decline (10× list) over `decline_km`, offer only options with ≥ `min_slack_h` slack.
+- `pricing.py` — `quote()`: levels 1–3 list price (**no quote = declined**). Levels 4+: list × (`quote_mult` + `backlog_k` × backlog), decline (10× list) over `decline_km`, offer only options with ≥ `min_slack_h` slack. `trust_w` and `later_mult` exist but are off (tested worse, LESSONS.md).
 - `analysis/orders.py --note "..."` — per-order late%/margin by distance, option, day, hour, town. `analysis/common.py` loads worlds by log note.
 - `config.py` — `Params` dataclass; every tunable number. Defaults reproduce the kit starter exactly (ladder off). `--set k=v` overrides.
 - `evaluate.py` — seeds `l{level}-a..` (`--seed-prefix l8x` for the holdout set), ≤ 6 parallel worlds, checks open-world count first, appends JSON line (commit, params, per-seed scores).
@@ -46,7 +46,9 @@ Scripts load `.env` themselves (`main.load_env`). Use `.venv/bin/python`, not sy
 ## Current best
 
 Presets in `config.PRESETS`, use `--preset NAME` with main.py / evaluate.py:
-- `l8` (the final's level): quote 1.6× list + 0.01 per unbooked order (backlog), decline > 500 km, only options with ≥ 8 h slack, fee opens 0.8×. **+€79,155 on l8-a..j, +€82,446 on unseen l8x-a..j, 20/20 weeks ranked, worst 92.0%.** Starter: −€604,425 per 10 weeks.
+- `l8` (the final's level): quote 1.45× list + 0.03 per driverless order, decline > 550 km, options with ≥ 8 h slack, fee 0.8× +0.1× every 30 min. **€297,267 over 30 weeks (l8 €89,964, l8x €95,598, l8y €111,705), 30/30 ranked, worst 91.0%.**
+- `l8_v1`: the previous level-8 preset (q1.6, bk0.01, decline 500, raise hourly): €260,043 on the same 30 weeks.
+- Practice ranking L8, round "Saturday 00:00" (with `l8_v1`): `bahn67` rank 11/25, €46,496 (10th €51,157, House best €71,790). Goal: top 10 → ≈ +€1,000–2,000/week.
 - `l1`: fee ladder 0.7× +0.3×/h cap 1.5× → +€34,186 on l1-a..j (starter −€28,978).
 - `starter`: the default; reproduces the kit starter exactly.
-Always confirm a level-8 change on BOTH `l8` and `--seed-prefix l8x` before keeping it. Update this section when it changes.
+Confirm a level-8 change on `l8` AND `l8x`; use `l8y` only as a final check (don't tune on it). Target worst week ≥ 91%. Update this section when it changes.

@@ -3,7 +3,10 @@
     python main.py --level 1 --seed l1-a [--set open_mult=0.9 ...]
     python main.py --final
 
-Ranking runs (board) are deliberately not exposed here.
+    python main.py --board --level 8 --preset l8      # one RANKING run: counts on the practice leaderboard
+
+A ranking run plays the next secret week of the current round (5 per level per round, each once).
+It can't be revealed or forked, and deleting it doesn't remove it, so we never auto-delete one.
 """
 from __future__ import annotations
 
@@ -111,6 +114,7 @@ def main() -> None:
     parser.add_argument("--level", type=int, choices=range(1, 9), default=1)
     parser.add_argument("--seed")
     parser.add_argument("--final", action="store_true", help="play our copy of the final from the live stream")
+    parser.add_argument("--board", action="store_true", help="play our next RANKING run at the level (counts on the practice leaderboard)")
     parser.add_argument("--preset", choices=sorted(config.PRESETS), default="starter", help="named configuration from config.PRESETS")
     parser.add_argument("--set", nargs="*", default=[], metavar="NAME=VALUE", help="override parameters from config.Params")
     args = parser.parse_args()
@@ -132,11 +136,17 @@ def main() -> None:
                     time.sleep(5)
             score = world.score()
         else:
-            world = client.create(level=args.level, seed=args.seed)
-            print(f"Practice world {world.id}, level {args.level}.", flush=True)
+            if args.board and args.seed:
+                sys.exit("--board plays the round's secret week: it takes no --seed.")
+            world = client.create(level=args.level, seed=args.seed, board=args.board)
+            kind = "Ranking run" if args.board else "Practice world"
+            print(f"{kind} {world.id}, level {args.level}, preset {args.preset}.", flush=True)
             try:
                 score = play_practice(world, args.level, params)
             except BaseException:
+                if args.board:  # deleting a ranking run doesn't remove it: leave it, it plays on without us
+                    print(f"{kind} {world.id} stopped; it counts with whatever it scores.", file=sys.stderr)
+                    raise
                 try:
                     world.delete()  # free the practice slot
                 except SpreadError:

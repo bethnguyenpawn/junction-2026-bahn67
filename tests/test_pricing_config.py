@@ -51,6 +51,16 @@ class Pricing(unittest.TestCase):
         # nothing left -> decline at 10x list
         self.assertEqual(pricing.quote(request([SAME]), 8, p, drive_min=120), {"same_day": 100000})
 
+    def test_later_mult_only_changes_later_options(self):
+        p = Params(quote_mult=1.5, min_slack_h=1, later_mult=1.1)
+        self.assertEqual(pricing.quote(request([SAME, NEXT]), 8, p), {"same_day": 15000, "next_day": 19800})
+
+    def test_dealer_trust_only_at_level_8_and_capped(self):
+        p = Params(quote_mult=1.0, trust_w=1.0)
+        self.assertEqual(pricing.quote(request([SAME]), 7, p, trust=10), {"same_day": 10000})
+        self.assertEqual(pricing.quote(request([SAME]), 8, p, trust=10), {"same_day": 11000})
+        self.assertEqual(pricing.quote(request([SAME]), 8, p, trust=99), {"same_day": 12500})
+
     def test_prices_are_whole_cents(self):
         q = pricing.quote(request([("same_day", 20 * 60, 3333)]), 8, Params(quote_mult=1.37))
         self.assertIsInstance(q["same_day"], int)
@@ -74,14 +84,14 @@ class Config(unittest.TestCase):
         p = from_overrides(["decline_km=450.5", "raise_steps=4"], PRESETS["l8"])
         self.assertEqual(p.decline_km, 450.5)
         self.assertEqual(p.raise_steps, 4)
-        self.assertEqual(p.quote_mult, 1.6)  # rest of the preset kept
+        self.assertEqual(p.quote_mult, PRESETS["l8"].quote_mult)  # rest of the preset kept
 
     def test_unknown_parameter_fails(self):
         with self.assertRaises(SystemExit):
             from_overrides(["nope=1"])
 
     def test_presets_exist(self):
-        self.assertEqual(set(config.PRESETS), {"starter", "l1", "l8"})
+        self.assertEqual(set(config.PRESETS), {"starter", "l1", "l8", "l8_v1"})
         self.assertIs(PRESETS["starter"], DEFAULT)
 
 

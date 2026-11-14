@@ -46,15 +46,18 @@ Our development priorities are:
 
 ## 📊 Status
 
-**Level 8 (the final's level), `--preset l8`:** +€8,080/week over 20 test weeks, **every week ranked** (worst 92% on time). The official starter loses €60,442/week there and is never ranked.
+**Level 8 (the final's level), `--preset l8`:** **+€9,909/week over 30 test weeks, every week ranked** (worst 91.0% on time). The official starter loses €60,442/week there and is never ranked.
 
-| Level 8 | 10 tuning weeks | 10 unseen weeks |
+| Level 8, 30 weeks (`l8`, `l8x`, `l8y`) | Margin | Worst week |
 |---|---|---|
-| Official starter | −€604,425, 0/10 ranked | — |
-| **Ours** | **+€79,155, 10/10 ranked** | **+€82,446, 10/10 ranked** |
+| Official starter (10 weeks) | −€604,425, 0/10 ranked | 39.3% |
+| Previous preset `l8_v1` | €260,043 | 92.0% |
+| **Current `l8`** | **€297,267, 30/30 ranked** | **91.0%** |
 
-How it works (five rules): quote 1.6× list price, higher when many orders still lack a driver; decline trips over 500 km; only offer delivery options with ≥ 8 h to find a driver; open driver fees at 0.8× the typical fee.
-Details: [PROGRESS.md](PROGRESS.md) (status, next steps, deadlines) · [LESSONS.md](LESSONS.md) (every experiment with numbers).
+**Practice ranking (level 8, round "Saturday 00:00", with `l8_v1`): rank 11 of 25, €46,496 over 5 weeks.** 10th place: €51,157. House best: €71,790.
+
+How it works: quote 1.45× list price, higher when many orders still lack a driver; decline trips over 550 km; only offer delivery options with ≥ 8 h to find a driver; driver fees open at 0.8× the typical fee and rise every 30 min.
+Details: [PROGRESS.md](PROGRESS.md) (status, next steps, deadlines) · [LESSONS.md](LESSONS.md) (every experiment, including what failed).
 
 ## 🚀 Getting Started
 
@@ -82,7 +85,7 @@ python main.py --final --preset l8                               # play the fina
 python -m unittest discover -s tests                             # offline tests (no key needed)
 ```
 
-- Presets (`config.PRESETS`): `starter` (default, identical to the official starter), `l1`, `l8`. `--set name=value` overrides any `Params` field.
+- Presets (`config.PRESETS`): `starter` (default, identical to the official starter), `l1`, `l8`, `l8_v1` (previous). `--set name=value` overrides any `Params` field.
 - Every `evaluate.py` run appends settings and scores to `results/log.jsonl`. Add a row to `LESSONS.md` for each experiment, and check level-8 changes on both seed sets.
 - Do **not** play ranking runs (`board: true`) without agreeing as a team: each round has only 5 per level.
 
@@ -108,7 +111,7 @@ junction-2026/
 
 - [x] Starter split into our modules (identical results), benchmark harness, analysis scripts.
 - [x] Level 1 profitable: fee ladder (+€3,419/week vs −€2,898 for the starter).
-- [x] **Level 8 profitable and ranked on 20/20 test weeks** (+€8,080/week).
+- [x] **Level 8 profitable and ranked on 30/30 test weeks** (+€9,909/week); practice ranking 11/25.
 - [ ] Test the live final loop in a test final (Sat 14:00 / 20:00).
 - [ ] Level 8: dealer trust, handling after `deadline_close`, price-war day.
 - [ ] Final (Sun 08:00), then submission by Sun 10:00 (hash, code link, 5–10 slides).

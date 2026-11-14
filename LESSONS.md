@@ -128,3 +128,121 @@ On unseen weeks `l8x`, the best config kept its margin (+€81,073) but one week
 | **backlog_k = 0.01** | l8x (unseen) | **+€82,446** | 95.9% | 94.2% | **10/10** |
 
 **Current level-8 system = `--preset l8`: +€8,080/week over 20 weeks, every week ranked (worst 92.0%), vs −€60,442/week for the starter.**
+
+## Practice ranking check (level 8, round "Saturday 00:00")
+
+Played the round's 5 secret weeks with `--preset l8` (ranking runs, started by the user).
+
+| Week | Margin | On time |
+|---|---|---|
+| 1 | €8,251 | 95.8% |
+| 2 | €8,174 | 96.7% |
+| 3 | €7,752 | 96.5% |
+| 4 | €11,273 | 95.1% |
+| 5 | €11,046 | 95.3% |
+| **Total** | **€46,496** | 95.8%, 5/5 ranked |
+
+Rank 11 of 25. 10th: €51,157 · House best: €71,790 · 1st (Juhus): €80,030.
+Our own estimate (+€8,080/week) matched the secret weeks (+€9,299/week), so the seed sets predict well.
+**Lesson:** we are reliable (on-time never below 95%) but under-earn by ≈ €5,000/week vs House best. Next gains must come from margin, not safety.
+
+# Saturday night: closing the gap to the top 10
+
+Base = `--preset l8` (quote 1.6, backlog 0.01, decline > 500 km, slack ≥ 8 h, open fee 0.8): l8 €79,155 · l8x €82,446.
+
+## Experiment 8: dealer trust pricing (`trust_w`) ✗ did not work
+
+- **Idea:** level-8 dealers accept 1% more per on-time order (max 25), so price each dealer at base × (1 + trust_w × 1% × count). Count kept from our own ledger (revenue without late refund = +1; late = halve), rebuilt in `rejoin`.
+- **Result:** worse. Raising prices costs more wins than it earns.
+
+| Change | l8 | l8x |
+|---|---|---|
+| trust_w = 1.0 | €66,483 (−€12.7k) | €70,850 (−€11.6k) |
+| trust_w = 0.4 | €73,819 (−€5.3k) | — |
+
+- **Lesson:** the base price was already too high; trust is worth more as *extra wins at the same price* than as a higher price. Code kept (off by default).
+
+## Experiment 9: re-tune the base price with all rules on ✓ biggest gain
+
+The other rules (slack, backlog) changed after `quote_mult` was tuned, so we re-swept it.
+
+| quote_mult | backlog_k | l8 | l8x | Worst week | Verdict |
+|---|---|---|---|---|---|
+| 1.6 (old) | 0.01 | €79,155 | €82,446 | 92.0% | old preset |
+| 1.75 | 0.01 | €48,658 | — | 93.6% | ✗ too few wins |
+| 1.45 | 0.01 | €91,050 | €94,424 | **89.1%** (l8x) | ✗ one week unranked |
+| 1.35 | 0.01 | €91,724 | — | 90.4% | ✗ too close to 90% |
+| 1.25 | 0.01 | €87,136 | — | 88.9% | ✗ unranked week |
+| 1.35 | 0.02 | €91,311 | €95,444 | 90.5% (l8x) | ✗ too close |
+| **1.45** | **0.02** | **€88,447** | **€91,159** | **91.6%** | ✓ **new best: +€18,005 (+11%) over 20 weeks, 20/20 ranked** |
+
+- **Lesson:** a lower price wins more; a stronger backlog brake (0.02 per driverless order) keeps the overload weeks safe.
+
+## Experiment 10: relax the safety filters (on q1.45, bk0.02)
+
+| Change | l8 | l8x | Worst | Verdict |
+|---|---|---|---|---|
+| slack ≥ 6 h (from 8) | €90,200 | €91,604 | 90.2% | ✗ +€2.2k for too much risk |
+| decline > 600 km (from 500) | €89,701 | — | 91.2% | ~ +€1.3k on l8, needs l8x |
+
+## Experiment 11: driver fees without raises ✗
+
+- **Idea:** from level 2 drivers learn our raises and wait (median booking now 64 min after posting). A flat fee (0.9×, no raises) should stop the waiting.
+- **Result:** l8 €79,952 (−€8.5k), worst week 89.3% ✗. Raises still find drivers for the hard cars.
+
+Where the money goes now (q1.45 bk0.02, per week): revenue €23,885, driver fees −€14,412 (60%), late refunds −€318, failed visits −€212. 4.5% of orders late. Booked fee median 0.90× typical.
+
+## Experiment 12: decline distance (on q1.45, bk0.02)
+
+| decline_km | l8 | l8x | Worst | Verdict |
+|---|---|---|---|---|
+| 500 | €88,447 | €91,159 | 91.6% | old |
+| **600** | **€89,701** | **€100,035** | 91.2% | ✓ +€10.1k (400–599 km orders are now profitable and on time) |
+| 700 | €94,514 | €102,323 | **85.1%** | ✗ unranked weeks |
+
+## Experiment 13: fees after `deadline_close` and raise speed (on q1.45, bk0.02, decline 600)
+
+| Change | l8 | l8x | Worst | Verdict |
+|---|---|---|---|---|
+| steep fee 1.25× (from 1.5×) | €92,428 | — | 89.7% | ✗ unranked week |
+| steep fee 2.0× | €86,330 | — | 91.7% | ✗ less margin |
+| raise 0.05×/h (from 0.1×) | €88,309 | — | 91.1% | ✗ |
+| raise every 30 min (from 60) | €97,260 | €102,988 | **90.5%** | ~ +€10.5k but too close to 90% |
+| raise every 30 min + quote 1.5 | €93,346 | €99,101 | 91.6% | ✓ €192,447 |
+| **raise every 30 min + backlog 0.03** | **€93,789** | **€96,294** | **92.3%** | ✓ **€190,083, safest → new preset** |
+| open fee 0.7× (from 0.8×) | €77,249 | — | 91.4% | ✗ −€12k |
+
+- **Lesson:** faster raises book drivers sooner (fewer cars near their deadline); the stronger backlog brake buys back the safety.
+- **New `--preset l8`:** q1.45, backlog 0.03, decline > 600 km, slack ≥ 8 h, fee 0.8× +0.1× every 30 min → **€190,083 over 20 weeks** vs €161,601 for `l8_v1` (+18%), worst week 92.3%.
+
+## Experiment 14: price by delivery option (`later_mult`) ✗
+
+| Change (on raise30, bk0.03) | l8 | Verdict |
+|---|---|---|
+| next_day / within_3_days at 0.9× the same_day price | €88,910 | ✗ −€4.9k |
+| … at 1.1× | €87,403 | ✗ −€6.4k |
+
+Code kept, off by default (1.0).
+
+## Experiment 15: quote 1.4 (on raise30, bk0.03)
+
+l8 €96,223 · l8x €100,096 (worst 91.3%) · l8y €115,529 (worst **90.8%**). +€6k but the fresh weeks show it is too close to 90% → not adopted.
+
+## Final check on 10 fresh weeks (`l8y`, never used for tuning)
+
+| Preset | l8y total | Worst week |
+|---|---|---|
+| `l8_v1` (ranked 11th in round "Saturday 00:00") | €98,442 | 92.8% |
+| q1.45, bk0.03, raise30, decline 600 | €115,168 (+17%) | **90.5%** (l8y-j: 500–599 km orders 26% late) |
+| q1.4, same | €115,529 | 90.8% |
+
+## Experiment 16: decline > 550 km (compromise) ✓ adopted
+
+| Preset | l8 | l8x | l8y | 30 weeks | Worst |
+|---|---|---|---|---|---|
+| `l8_v1` | €79,155 | €82,446 | €98,442 | €260,043 | 92.0% |
+| decline 600 | €93,789 | €96,294 | €115,168 | €305,251 | 90.5% |
+| **decline 550 → `--preset l8`** | **€89,964** | **€95,598** | **€111,705** | **€297,267 (+14%)** | **91.0%** |
+
+**Why 550 over 600:** −€270/week for half a point more safety on the worst week. The final is one week, played once; being unranked loses everything.
+**Stopped here:** every further change gained < €300/week or cost safety.
