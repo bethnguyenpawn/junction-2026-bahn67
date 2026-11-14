@@ -1,7 +1,8 @@
 """Offline tests (no server, no key): pricing rules, fee schedules and config parsing.
 
-    python -m unittest discover -s tests
+python -m unittest discover -s tests
 """
+
 import os
 import sys
 import unittest
@@ -21,11 +22,16 @@ def quote(req, level, params, **situation):
 
 
 def request(options, respond_by=NOON):
-    return {"id": "R1", "respondBy": respond_by, "legs": [{}], "referenceFeeCents": 5000,
-            "options": [{"kind": k, "deadline": d, "listPriceCents": p} for k, d, p in options]}
+    return {
+        "id": "R1",
+        "respondBy": respond_by,
+        "legs": [{}],
+        "referenceFeeCents": 5000,
+        "options": [{"kind": k, "deadline": d, "listPriceCents": p} for k, d, p in options],
+    }
 
 
-SAME = ("same_day", 20 * 60, 10000)            # Monday 20:00
+SAME = ("same_day", 20 * 60, 10000)  # Monday 20:00
 NEXT = ("next_day", 24 * 60 + 20 * 60, 12000)  # Tuesday 20:00
 
 
@@ -78,6 +84,29 @@ class Pricing(unittest.TestCase):
         self.assertEqual(quote(r, 8, Params(quote_mult=1.5, private_add=0.2)), {"same_day": 17000})
         self.assertEqual(quote(r, 8, Params(quote_mult=1.5, private_add=9)), {"same_day": 100000})
 
+    def test_delivery_place_offset(self):
+        r = request([SAME])
+        r["legs"] = [{"delivery": {"placeId": "vantaa"}}]
+        offset = pricing.DEST_OFFSET["vantaa"]  # competitor cheap there: we quote lower
+        self.assertLess(offset, 0)
+        self.assertEqual(
+            quote(r, 8, Params(quote_mult=1.5, dest_k=1.0)), {"same_day": int(10000 * (1.5 + offset) + 0.5)}
+        )
+        r["legs"] = [{"delivery": {"placeId": "nowhere"}}]  # unknown place: no offset
+        self.assertEqual(quote(r, 8, Params(quote_mult=1.5, dest_k=1.0)), {"same_day": 15000})
+
+    def test_expected_profit_price_accounts_for_delivery_place_offset(self):
+        r = request([SAME])
+        r["arrivedAt"] = NOON
+        r["legs"] = [{"pickup": {"privateAddress": False},
+                       "delivery": {"privateAddress": False, "placeId": "vantaa"}}]
+        p = Params(opt=1)
+        s = pricing.Situation(km=30, near=80, near_delivery=80)
+        vantaa = pricing.best_price(r, r["options"][0], p, s)
+        r["legs"][0]["delivery"]["placeId"] = "joensuu"
+        joensuu = pricing.best_price(r, r["options"][0], p, s)
+        self.assertLess(vantaa, joensuu)
+
     def test_win_rate_adjustment_moves_the_price(self):
         p = Params(quote_mult=1.5)
         self.assertEqual(quote(request([SAME]), 8, p, adapt=-0.1), {"same_day": 14000})
@@ -118,38 +147,36 @@ class Config(unittest.TestCase):
             from_overrides(["nope=1"])
 
     def test_presets_exist(self):
-        self.assertEqual(set(config.PRESETS), {"starter", "l1", "l8", "l8_guarded", "l8_flat", "l8_v2", "l8_v1"})
+        self.assertEqual(set(config.PRESETS), {"starter", "l1", "l8", "l8_guarded", "l8_v3", "l8_v2", "l8_v1"})
         self.assertIs(PRESETS["starter"], DEFAULT)
 
-    def test_l8_guarded_keeps_reliability_filters_and_capacity_penalty(self):
+    def test_l8_guarded_keeps_lane_price_and_reliability_filters(self):
         p = PRESETS["l8_guarded"]
-        self.assertEqual((p.opt, p.opt_backlog), (1, 0.04))
+        self.assertEqual((p.dest_k, p.opt, p.opt_backlog), (1.0, 1, 0.04))
         self.assertEqual((p.decline_km, p.min_slack_h), (550, 8))
-        self.assertEqual((p.open_mult, p.raise_every_min), (0.8, 30))
         self.assertEqual((p.opt_guard_late, p.opt_guard_backlog, p.opt_delta_cap), (0.08, 3, 0.06))
-        self.assertIs(PRESETS["l8"], p)
 
     def test_l8_guarded_falls_back_to_flat_price_on_high_late_risk_or_backlog(self):
-        request_with_stops = request([SAME])
-        request_with_stops["arrivedAt"] = NOON
-        request_with_stops["legs"] = [{"pickup": {"privateAddress": False},
-                                       "delivery": {"privateAddress": False}}]
+        r = request([SAME])
+        r["arrivedAt"] = NOON
+        r["legs"] = [{"pickup": {"privateAddress": False},
+                       "delivery": {"privateAddress": False, "placeId": "vantaa"}}]
         p = PRESETS["l8_guarded"]
-        flat = quote(request_with_stops, 8, PRESETS["l8_flat"], near=0)
-        high_risk = quote(request_with_stops, 8, p, near=0)
-        high_backlog = quote(request_with_stops, 8, p, km=30, near=80, near_delivery=80, backlog=3)
-        self.assertEqual(high_risk, flat)
-        self.assertEqual(high_backlog, quote(request_with_stops, 8, PRESETS["l8_flat"], backlog=3,
-                                             near=80, km=30, near_delivery=80))
+        flat = quote(r, 8, PRESETS["l8"], near=0)
+        self.assertEqual(quote(r, 8, p, near=0), flat)
+        self.assertEqual(
+            quote(r, 8, p, km=30, near=80, near_delivery=80, backlog=3),
+            quote(r, 8, PRESETS["l8"], km=30, near=80, near_delivery=80, backlog=3),
+        )
 
     def test_l8_guarded_caps_low_risk_price_change(self):
-        request_with_stops = request([SAME])
-        request_with_stops["arrivedAt"] = NOON
-        request_with_stops["legs"] = [{"pickup": {"privateAddress": False},
-                                       "delivery": {"privateAddress": False}}]
+        r = request([SAME])
+        r["arrivedAt"] = NOON
+        r["legs"] = [{"pickup": {"privateAddress": False},
+                       "delivery": {"privateAddress": False, "placeId": "vantaa"}}]
         p = PRESETS["l8_guarded"]
-        guarded = quote(request_with_stops, 8, p, km=30, near=80, near_delivery=80)
-        flat = quote(request_with_stops, 8, PRESETS["l8_flat"], km=30, near=80, near_delivery=80)
+        guarded = quote(r, 8, p, km=30, near=80, near_delivery=80)
+        flat = quote(r, 8, PRESETS["l8"], km=30, near=80, near_delivery=80)
         self.assertLessEqual(abs(guarded["same_day"] - flat["same_day"]), int(SAME[2] * p.opt_delta_cap + 0.5))
 
 

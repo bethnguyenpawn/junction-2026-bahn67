@@ -25,20 +25,12 @@ def rows_of(c, wid, places, roads):
     homes = defaultdict(int)
     for drv in d["roster"]:
         homes[drv["homePlaceId"]] += 1
-    near = {
-        p: sum(
-            n
-            for h, n in homes.items()
-            if straight_km(places[p], places[h]) <= NOTIFY_KM
-        )
-        for p in places
-    }
+    near = {p: sum(n for h, n in homes.items() if straight_km(places[p], places[h]) <= NOTIFY_KM) for p in places}
     reqs = {rr["request"]["id"]: rr for rr in d["reveal"]["requests"]}
     timeline = [
         (e["at"], e["line"]["orderId"], e["line"]["kind"])
         for e in d["events"]
-        if e["kind"] == "ledger"
-        and e["line"]["kind"] in ("revenue", "late_refund", "undelivered_penalty")
+        if e["kind"] == "ledger" and e["line"]["kind"] in ("revenue", "late_refund", "undelivered_penalty")
     ]
     trust, state, seen, ti, rows = defaultdict(int), {}, defaultdict(int), 0, []
     for rr in sorted(reqs.values(), key=lambda rr: rr["request"]["arrivedAt"]):
@@ -56,9 +48,7 @@ def rows_of(c, wid, places, roads):
                 )
         seen[r["dealerId"]] += 1
         q = rr.get("quote") or {}
-        mults = [
-            q[o["kind"]] / o["listPriceCents"] for o in r["options"] if o["kind"] in q
-        ]
+        mults = [q[o["kind"]] / o["listPriceCents"] for o in r["options"] if o["kind"] in q]
         if not mults or min(mults) >= 5:
             continue
         leg = r["legs"][0]
@@ -70,8 +60,7 @@ def rows_of(c, wid, places, roads):
                     trust[r["dealerId"]] / 25,
                     float(r["arrivedAt"] // 1440 == 0),
                     float(near[leg["pickup"]["placeId"]] >= 40),
-                    roads[(leg["pickup"]["placeId"], leg["delivery"]["placeId"])]["km"]
-                    / 100,
+                    roads[(leg["pickup"]["placeId"], leg["delivery"]["placeId"])]["km"] / 100,
                     float(seen[r["dealerId"]] >= 20),
                 ],
                 float(rr["outcome"] == "won"),
@@ -98,16 +87,11 @@ if __name__ == "__main__":
     places = {p["id"]: p for p in m["places"]}
     roads = {(r["from"], r["to"]): r for r in m["roads"]}
     data = [
-        row
-        for note in notes
-        for wid in worlds_from_args(["--note", note])
-        for row in rows_of(c, wid, places, roads)
+        row for note in notes for wid in worlds_from_args(["--note", note]) for row in rows_of(c, wid, places, roads)
     ]
     x = np.array([r[0] for r in data])
     y = np.array([r[1] for r in data])
-    half = (
-        len(x) // 2
-    )  # rows are grouped by world: fit on the first worlds, check on the rest
+    half = len(x) // 2  # rows are grouped by world: fit on the first worlds, check on the rest
     w = fit(x[:half], y[:half])
     p = 1 / (1 + np.exp(-x[half:] @ w))
     print(f"{len(x)} quotes, win rate {y.mean():.1%}")
@@ -115,10 +99,7 @@ if __name__ == "__main__":
         "held-out log loss %.4f (base rate %.4f)"
         % (
             -np.mean(y[half:] * np.log(p) + (1 - y[half:]) * np.log(1 - p)),
-            -np.mean(
-                y[half:] * np.log(y[:half].mean())
-                + (1 - y[half:]) * np.log(1 - y[:half].mean())
-            ),
+            -np.mean(y[half:] * np.log(y[:half].mean()) + (1 - y[half:]) * np.log(1 - y[:half].mean())),
         )
     )
     print(

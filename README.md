@@ -1,152 +1,172 @@
-# 🚗 Bahn Express AI Agent — Junction 2026
+# Bahn Express AI Agent — Junction 2026
 
-Team `bahn67`'s system for the **Spread** challenge by Bahn Express. It runs a car-transport company for one simulated week in Finland:
-it quotes prices to car dealers, wins orders, and hires freelance drivers to move the cars.
+Team `bahn67`'s bot for the **Spread** challenge by Bahn Express. For one simulated week in Finland it quotes prices to car dealers, wins orders, and hires freelance drivers to move the cars.
 
-**Score = gross margin** (prices in − driver fees, refunds, penalties out). **At least 90% of won orders must arrive on time**, or the team is not ranked.
-**The final is Sunday 15 Nov 08:00:** one level-8 week on a live clock (~34 min). The 10 ranked teams with the highest margin present to the jury.
+- **Score = gross margin:** prices in, minus driver fees, refunds and penalties.
+- **At least 90% of won orders must arrive on time**, or the team is not ranked.
+- **The final is Sunday 15 Nov 08:00:** one level-8 week on a live clock (~34 min). The top 10 by margin present to the jury.
 
-More: [PROGRESS.md](PROGRESS.md) (status, next steps, deadlines) · [LESSONS.md](LESSONS.md) (every experiment, including what failed) · [docs/CHALLENGE_SUMMARY.md](docs/CHALLENGE_SUMMARY.md) (the challenge in plain words).
+Status and next steps: [PROGRESS.md](PROGRESS.md) · every experiment: [LESSONS.md](LESSONS.md) · the challenge in plain words: [docs/CHALLENGE_SUMMARY.md](docs/CHALLENGE_SUMMARY.md)
 
-## 📊 Status (Sat 14 Nov, 12:15)
+## Setup
 
-| Level 8 strategy | Margin per week | Evidence |
-|---|---|---|
-| Official starter | −€60,442 | never ranked (46% late) |
-| `l8_flat` (previous) | +€10,265 | 30 historical weeks, all ranked, worst week 92.6% on time |
-| **`--preset l8`** (current, guarded) | **+€9,581** | 20 matched weeks vs `l8_flat`; +€105/week, 20/20 ranked, worst week 94.6%. Fresh `l8z` holdout gained €1,175 over 10 weeks. Use for ranking runs and the final. |
-| Practice round "Saturday 09:00" (`l8_flat`) | €9,400 (€47,002 / 5 weeks) | **rank 28 of 36** finished, 97.3% on time |
-| 10th place / House best / 1st in that round | €13,744 / €10,132 / €15,515 | **top 10 needs ≈ +€4,500/week** |
+You need Python 3.9+ and git.
 
-What we have measured:
-- **Price:** win rate at 1.2× list 61%, 1.4× 40%, 1.6× 19%. Profit per request is flat from 1.1× to 1.4×, so price tuning alone won't close the gap. Cheaper prices and longer trips leave a fresh week under 90%.
-- **Drivers:** we use 100–150 of the 650–950 drivers a week; fees are ~60% of revenue. Our fee schedule is already at its optimum as one level for all cars.
-- **Volume:** on the same weeks the top teams win 1.4–2× more orders at the same margin per order and on-time share.
-- **Dealer trust:** at the same price we win 36% of a dealer's requests at trust 0–4 and 82% at trust 25. One dealer sends 1/3 of all requests, and each late order halves its trust.
-- **Expected-profit pricing:** unguarded settings failed on fresh matched runs (88.6% and 89.5% worst weeks). The guarded version raises expected margin by €2,091 over 20 matched weeks, with all weeks ranked and 94.6% worst on time.
-- **Mondays:** we win almost nothing (the competitor starts each week cheap).
-- **No gain** (code kept, off): dealer-trust pricing, flat fees, fee level per car, direct offers, two-car gigs, win-rate steering, price by our cost.
-- **Restart works:** rebuilding mid-week from the server gives the same result; the final loop skips a failing event instead of stopping.
-
-Next:
-1. **Test final Sat 14:00 / 20:00:** start `python main.py --final --preset l8` before it begins (the live loop has never run on a moving clock).
-2. Make expected-profit pricing safe (stronger capacity term), then check on `l8x` / `l8y`.
-3. Price-war day (competitor −20% for one day) and the outage region (competitor down for a day).
-
-## ⚙️ How it works
-
-### Talking to the game server
-
-We use the official `spread` Python kit. It sends HTTPS + JSON to `https://spread.bahnexpress.com`, with our team key in the header `Authorization: Bearer <key>` (read from `.env`).
-
-1. **Start a week:** `POST /v1/worlds` with `{"level": 8, "seed": "l8-a"}` → a world id. A world is one simulated week; the clock stands at Monday 00:00. The same seed always gives the same week.
-2. **Load the map:** `GET /v1/map` → towns, and road km and minutes between them.
-3. **Move the clock:** `POST /v1/worlds/{id}/advance` with
-   ```json
-   {"untilEvent": ["price_request", "order_won", ...], "max": 1440, "actions": []}
-   ```
-   = "run to the next event we care about, at most to midnight". The server answers with the events since the last call, e.g.
-   ```json
-   {"kind": "price_request", "request": {"id": "R00042", "options": [
-       {"kind": "same_day", "listPriceCents": 10000}, {"kind": "next_day", "listPriceCents": 9000}]}}
-   ```
-4. **Decide:** our code turns each event into an action:
-   - price request → quote, e.g. list × 1.45: `{"type": "quote", "requestId": "R00042", "prices": {"same_day": 14500, "next_day": 13050}}`
-   - order won → post a gig for drivers: `{"type": "post", "stops": [...], "schedule": [{"at": 600, "feeCents": 4000}, ...]}`
-   - deadline warning → raise the fee: `{"type": "reprice", "gigId": "...", "schedule": [...]}`
-5. **Send and move on:** the next `advance` carries these in `actions` (max 50 per call). The server applies them at the current minute, moves the clock, and returns new events: order won or lost, driver booked, car delivered, money in or out.
-6. **Repeat** 4–5 (~1,500 times) until the week ends.
-7. **Score:** `GET /v1/worlds/{id}/score` → margin and on-time %.
-
-**The final** works the same, except the clock runs by itself (no `advance`): events arrive over a WebSocket, and we send the same action JSON with `POST /v1/worlds/{id}/actions`. If our program restarts, it rebuilds its state from the world's snapshot and event history.
-
-### How our level-8 system decides
-
-1. **Price:** use fitted expected-profit prices only when predicted lateness is ≤ 8% and driverless backlog is below 3. Keep each price within 6% of the prior flat `l8` quote; otherwise fall back to that quote (1.45× list, +0.03× per driverless order, −0.2× in dense pickup areas, +0.2× for private addresses).
-2. **Decline** (quote 10× list: never wins, costs nothing): trips over 550 km, and requests whose delivery options leave < 8 h to find a driver.
-3. **Driver fee:** opens at 0.8× the typical fee, +0.1× every 30 min up to 1.3×. After the deadline warning: 1.5×, rising to 2.5×.
-
-## 🚀 Getting started
-
-Requirements: Python 3.9 or later, git.
+**1. Get the code and install**
 
 ```bash
 git clone git@github.com:bethnguyenpawn/junction-2026-bahn67.git
 cd junction-2026-bahn67
-git checkout otso/level1-baseline     # our working branch
+git checkout otso/level1-baseline        # our working branch
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt     # installs the official Spread kit (+ numpy for analysis)
-cp .env.example .env                # then put the team key in .env (never commit it)
-python -m unittest discover -s tests   # check: 20 tests OK, no key needed
+pip install -r requirements.txt          # the official Spread kit + numpy
 ```
 
-**The team key:** ask a teammate for the `bahn67` key; don't create a new team at `/join` (that gives a different team). A wrong or placeholder key fails with "The server does not accept this key (HTTP 401)".
-
-### Run
+**2. Add the team key**
 
 ```bash
-python main.py --level 8 --seed l8-a --preset l8                 # play one practice week
-python evaluate.py --level 8 --preset l8                         # benchmark on 10 fixed weeks (~1-2 min)
-python evaluate.py --level 8 --preset l8 --seed-prefix l8x       # same on 10 other weeks
-python evaluate.py --level 8 --preset l8 --set quote_mult=1.5 --note "what I'm trying"
-python analysis/orders.py --note "what I'm trying"               # which orders were late / lost money
-python analysis/market.py --note "what I'm trying"               # win rate by price, drivers near pickup
-python analysis/winmodel.py --note "explore l8 1.1-1.9"          # fit the win-chance model (needs numpy)
-python main.py --final --preset l8                               # play the final (live)
-python -m unittest discover -s tests                             # offline tests (no key needed)
+cp .env.example .env
 ```
 
-- **Presets** (`config.PRESETS`): `starter` (default, identical to the official starter), `l1`, `l8` (current guarded strategy), `l8_guarded` (alias), `l8_flat` (previous l8), `l8_v2` and `l8_v1` (older). `--set name=value` overrides any `Params` field.
-- **Seed sets:** historical tuning used `l8`, `l8x`, and `l8y`; the guarded strategy passed a matched fresh holdout on `l8z`.
-- Every `evaluate.py` run appends its settings and scores to `results/log.jsonl`.
+Open `.env` and replace `put-your-team-key-here` with the `bahn67` key; ask a teammate for it. Don't create a new team at `/join`: that would be a different team. Never commit `.env`.
 
-### Project structure
+**3. Check it works**
 
-```text
-junction-2026/
-├── main.py              # Runs a world: practice advance loop + final live-stream loop
-├── dispatch.py          # Desk: answers each event; driver fees, recovery from problems
-├── pricing.py           # Quotes: price multiplier, backlog, distance, slack, driver-density, private-address rules
-├── config.py            # All tunable parameters (Params) and presets
-├── evaluate.py          # Benchmark over fixed seeds -> results/log.jsonl
-├── analysis/            # fees.py, orders.py, market.py: analysis of ended weeks
-├── tests/               # Offline unit tests: pricing rules, fees, config
-├── results/log.jsonl    # Log of every benchmark run
-├── docs/                # Official docs (RULES, HANDBOOK, API, ...) + our summaries
-├── PROGRESS.md          # Status, next steps, deadlines
-├── LESSONS.md           # Experiment log
-└── CLAUDE.md            # Context for Claude Code sessions
+```bash
+python -m unittest discover -s tests                 # 22 tests OK (no key needed)
+python main.py --level 8 --seed l8-a --preset l8     # plays one practice week, ~1 min
 ```
 
-## 👥 Team
+The week should end with about `margin € 13,272   305 orders   95.4% on time   Ranked.` A key problem shows as `HTTP 401`.
 
-| Role | Members | Main files |
+## Commands
+
+```bash
+python main.py --level 8 --seed l8-a --preset l8                         # one practice week
+python evaluate.py --level 8 --preset l8                                 # benchmark: 10 fixed weeks, ~1-2 min
+python evaluate.py --level 8 --preset l8 --seed-prefix l8x               # the same on 10 other weeks
+python evaluate.py --level 8 --preset l8 --set quote_mult=1.5 --note "idea"   # try one change
+python analysis/orders.py --note "idea"                                  # which orders were late / lost money
+python main.py --final --preset l8                                       # the final (live clock)
+```
+
+- **Presets** (`config.py`): `l8` is the current best, used for the final. `l8_guarded` is experimental and was not adopted: its gain did not repeat on fresh holdouts. `starter` = the official starter, and the `l8_v*` presets are older versions. `--set name=value` changes any parameter.
+- **Test weeks:** tune on `l8`, confirm on `l8x`, and use `l8y` only as a final check. Each `evaluate.py` run is logged in `results/log.jsonl`.
+- **Ranking runs** (`--board`) only when the team agrees: 5 per round, and they can't be undone.
+
+## Files
+
+| File | What it is for |
+|---|---|
+| `main.py` | Starts a world and runs it: the practice loop (`advance`) or the final loop (live events). Recovers after errors. |
+| `dispatch.py` | The `Desk`: turns each event into actions (quote, post a gig, raise a fee, retry a failed pickup). |
+| `pricing.py` | The price for each request, or a decline. |
+| `config.py` | Every tunable number (`Params`) and the presets. |
+| `lanes.json` | How much dearer the competitor is per delivery town (fitted by `analysis/lanes.py`). |
+| `evaluate.py` | Benchmark: plays 10 fixed weeks in parallel and logs the score. |
+| `analysis/` | Scripts that study finished weeks: late orders, win rate by price, the fitted models. |
+| `tests/` | Offline unit tests. |
+| `docs/` | The official rules, handbook and API, plus our summary. |
+| `PROGRESS.md` / `LESSONS.md` | Status and next steps / every experiment with numbers. |
+| `CLAUDE.md` | Context for Claude Code sessions. |
+| `ruff.toml` | Code style; the VS Code Ruff extension formats on save. |
+
+## How it works
+
+### API calls, step by step
+
+We use the official `spread` Python kit. It sends HTTPS + JSON to `https://spread.bahnexpress.com` with the header `Authorization: Bearer <team key>`.
+
+1. **Start a week:** `POST /v1/worlds` with `{"level": 8, "seed": "l8-a"}` returns a world id. The clock stands at Monday 00:00, and the same seed always gives the same week.
+2. **Load the map:** `GET /v1/map` returns the towns, plus road km and minutes between them.
+3. **Move the clock:** `POST /v1/worlds/{id}/advance` with
+   ```json
+   {"untilEvent": ["price_request", "order_won", ...], "max": 1440, "actions": []}
+   ```
+   runs to the next event we care about, at most one day. It returns the events since the last call, e.g.
+   ```json
+   {"kind": "price_request", "request": {"id": "R00042", "options": [
+       {"kind": "same_day", "listPriceCents": 10000}, {"kind": "next_day", "listPriceCents": 9000}]}}
+   ```
+4. **Decide:** `dispatch.py` turns each event into an action:
+   - price request → quote: `{"type": "quote", "requestId": "R00042", "prices": {"same_day": 14500, "next_day": 13050}}`
+   - order won → post a gig for drivers: `{"type": "post", "stops": [...], "schedule": [{"at": 600, "feeCents": 4000}, ...]}`
+   - deadline warning → raise the fee: `{"type": "reprice", "gigId": "...", "schedule": [...]}`
+5. **Send:** the next `advance` carries these in `actions` (max 50 per call). The server applies them, moves the clock, and returns new events: order won or lost, driver booked, car delivered, money in or out.
+6. **Repeat** steps 4–5 (~1,500 times) until the week ends.
+7. **Score:** `GET /v1/worlds/{id}/score` returns the margin and the on-time share.
+
+**In the final** the clock runs by itself, so there is no `advance`. Events arrive over a WebSocket, and we send the same action JSON with `POST /v1/worlds/{id}/actions`. After a crash, the bot rebuilds its state from the world's snapshot and event history.
+
+## What we tune: parameters and models
+
+Winning means picking good numbers. All of them live in `Params` in `config.py`, and a preset is one set of them. Try a change without editing code: `--set name=value`.
+
+### Parameters used by `--preset l8`
+
+| Parameter | Value | What it does | Why this value |
+|---|---|---|---|
+| `quote_mult` | 1.45 | Base price = list price × this | The competitor is 26–54% above list; profit per request is flat from 1.1× to 1.4×, and cheaper prices win orders we then deliver late |
+| `backlog_k` | 0.03 | +0.03× per won order that has no driver yet | Slows winning when we're overloaded |
+| `dense_n`, `dense_cut` | 40, 0.2 | −0.2× where ≥ 40 drivers live within 30 km of the pickup | Those cars are easy to move (Exp. 17, 21) |
+| `private_add` | 0.2 | +0.2× when a stop is a private address | Private addresses are late ~3× as often (Exp. 20) |
+| `dest_k` | 1.0 | + the competitor's offset for the delivery town (`lanes.json`), −0.17× Vantaa … +0.18× Joensuu | Fitted from data; +4.1% (Exp. 30) |
+| `decline_km` | 550 | Decline trips longer than this | Longer trips push a fresh week under 90% on time (Exp. 16) |
+| `min_slack_h` | 8 | Only quote delivery options that leave ≥ 8 h to find a driver | Tight options are late |
+| `open_mult` | 0.8 | A gig's fee opens at 0.8× the typical fee | Fees are ~60% of revenue |
+| `raise_per_step`, `raise_every_min`, `raise_steps` | 0.1, 30, 6 | +0.1× every 30 min, up to 1.3× | Best tested as one schedule for all cars |
+| `steep_*` | defaults | After the deadline warning: 1.5×, +0.25× every 30 min, up to 2.5× | Last chance to find a driver |
+
+To decline, we quote 10× list: it never wins and costs nothing.
+
+### Fitted models (`analysis/`, numpy)
+
+| Model | Predicts | Learned from | Used by |
+|---|---|---|---|
+| Lane table: `lanes.py` → `lanes.json` | How much dearer the competitor is per delivery town | 19,450 quotes at random prices | `l8` (`dest_k`), **on** |
+| Win model: `winmodel.py` → `win_*` | Chance the dealer takes our price (price, dealer trust, Monday, drivers nearby, distance) | the same quotes | `opt` pricing (off) |
+| Late model: `latemodel.py` → `late_*` | Chance a won order is late (slack, private address, drivers nearby, backlog) | 16,118 won orders | `opt` pricing (off) |
+
+`opt=1` switches from the flat rules to "the price with the highest expected profit" from the win and late models. It remains off in `l8`: the guarded lane-aware experiment gained on tuning seeds but lost €3.7k across fresh holdouts (Exp. 34).
+
+### Tested and off
+
+Every other `Params` field is a rule we tested that didn't help. They're kept so each test can be rerun; the experiment number is next to each field in `config.py`, and the numbers are in `LESSONS.md`. They include: dealer-trust pricing, Monday prices, learning the week's price level, win-rate steering, direct offers to drivers (also return trips, Exp. 33), two-car gigs, per-car fee levels, and price by cost.
+
+### How to test a change
+
+```bash
+python evaluate.py --level 8 --preset l8 --set quote_mult=1.4 --note "q1.4"                    # 10 tuning weeks
+python evaluate.py --level 8 --preset l8 --seed-prefix l8x --set quote_mult=1.4 --note "x: q1.4"   # 10 holdout weeks
+```
+
+Compare with `l8`: €99,661 on the tuning weeks, €104,324 on `l8x`, €116,611 on `l8y`. Keep a change only if margin rises on both sets and every week stays ≥ 91% on time. Then log it in `LESSONS.md`.
+
+## Status (Sat 14 Nov)
+
+| Level 8 | Margin per week |
+|---|---|
+| Official starter | −€60,442 (never ranked) |
+| **Our `l8`**, 30 test weeks | **€10,687**, all ranked, worst week 91.5% on time |
+| Practice round "Saturday 09:00" (previous `l8`) | €9,400: rank 28 of 36 |
+| 10th / 1st place in that round | €13,744 / €15,515 |
+
+**The gap is volume:** the top teams win ~400 orders a week, we win ~255, at the same margin per order (€35–40). Details, findings and next steps: [PROGRESS.md](PROGRESS.md).
+
+## Team and rules
+
+| Area | Members | Main files |
 |---|---|---|
 | Pricing & order selection | Otso, Linh, Bao | `pricing.py` |
-| Driver dispatch & fees | Otso, Linh, Bao | `dispatch.py` |
-| Backend & API integration (kit, events, reliability in the final) | Anh | `main.py`, `config.py` |
-| Testing & evaluation, presentation | Everyone | `evaluate.py`, `tests/`, `analysis/` |
+| Drivers & fees | Otso, Linh, Bao | `dispatch.py` |
+| API integration, reliability in the final | Anh | `main.py`, `config.py` |
+| Testing, evaluation, presentation | Everyone | `evaluate.py`, `tests/`, `analysis/` |
 
-### Working rules
+- **One change at a time**, benchmarked on the same weeks, and logged in `LESSONS.md`. Keep it only if margin rises and every week stays ≥ 91% on time.
+- **At most one benchmark at a time:** the team has 8 world slots, and `evaluate.py` uses 6.
+- **Run the tests before merging.** Never commit `.env`.
 
-- **One change at a time** on the same seeds, then add a row to `LESSONS.md` (idea, why, effect). Keep a change only if margin rises and every week stays ≥ 91% on time.
-- **World slots:** the team can have 8 unfinished practice worlds; `evaluate.py` uses at most 6, so don't run two benchmarks at once.
-- **Ranking runs** (`--board`) only when agreed as a team: each round has 5 per level, and they can't be undone.
-- **Never commit `.env`** (the team key). Work on your own branch, keep `main` stable, run the tests before merging.
+## Links
 
-## 🗺️ Roadmap
-
-- [x] Starter split into our modules (identical results), benchmark harness, analysis scripts.
-- [x] Level 1 profitable: fee ladder (+€3,419/week vs −€2,898 for the starter).
-- [x] **Level 8 profitable and ranked on 30/30 test weeks** (+€10,265/week).
-- [x] Level 8 research: price curve, drivers by town, private addresses (+3.6%, safer: worst week 92.6%).
-- [ ] Test the live final loop in a test final (Sat 14:00 / 20:00).
-- [ ] Level 8: cheaper drivers (multi-car gigs), handling after `deadline_close`, price-war day.
-- [ ] Final (Sun 08:00), then submission by Sun 10:00 (hash, code link, 5–10 slides).
-
-## 📚 Resources
-
-- [Challenge overview](https://spread.bahnexpress.com/how) · [Handbook](https://spread.bahnexpress.com/handbook) · [Rules](https://spread.bahnexpress.com/rules) · [API reference](https://spread.bahnexpress.com/api)
-- [Starter kit](https://spread.bahnexpress.com/kit/) · [Leaderboard](https://spread.bahnexpress.com/leaderboard) · [Judging & submission](https://spread.bahnexpress.com/judging)
-- [Team page](https://spread.bahnexpress.com/team) (submission hash) · [Run viewer](https://spread.bahnexpress.com/viewer/)
+[Handbook](https://spread.bahnexpress.com/handbook) · [Rules](https://spread.bahnexpress.com/rules) · [API](https://spread.bahnexpress.com/api) · [Leaderboard](https://spread.bahnexpress.com/leaderboard) · [Team page](https://spread.bahnexpress.com/team) (submission hash) · [Run viewer](https://spread.bahnexpress.com/viewer/) · [Judging](https://spread.bahnexpress.com/judging)

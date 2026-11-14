@@ -440,30 +440,78 @@ Also checked: gigs for a later day do not overpay (46% book at the opening fee);
 
 Played `l8-a` to Wednesday 12:00, threw the desk away, rebuilt it with `Desk.rejoin` from the snapshot and events, played on: **€11,739.88 vs €11,737.33 uninterrupted**, same orders and on-time share. `play_final` now also skips an event whose handling fails and rebuilds after any other error, instead of stopping.
 
-## Experiments 29–30: guarded expected-profit pricing (Sat 14 Nov)
+## Experiment 29: making `opt` safer; trust as an investment ✗ (no clear gain)
 
-**Bottleneck:** the main headroom is quote selection. Historical notes show top teams win 1.4–2× as many orders, while the company has 650–950 drivers available and uses only 100–150. The fitted win model can improve request-level pricing, but unguarded expected-profit pricing changes which orders we win and is not reliable enough on its own.
+- **Diagnosis** (`analysis/orders.py`, l8x, opt vs `l8`): `opt` won 79 two-leg trade-ins (private addresses), **43% late**; flat `l8` almost never wins them. Late orders also cluster in same-day options with 24–36 h slack at 1.3–1.5×.
+- New `max_legs=1` (decline trade-ins) and `opt_trust_gain` (value of +1 trust per request we expect from that dealer later this week). Both off by default.
 
-### Experiment 29: full optimizer failed the reliability cutoff
+| opt + backlog cost 0.04 + … | l8 | l8x | Worst |
+|---|---|---|---|
+| `l8` (flat, for reference) | €95,102 | €99,994 | 92.6% |
+| max_legs=1 | | €98,259 | **89.4%** ✗ |
+| max_legs=1, late refund share 1.0 | **€98,156** | €99,248 | 91.4% |
+| … + trust gain 0.0015 | €94,363 | | 93.6% |
+| … + trust gain 0.005 | €83,338 (+15% orders) | | 92.6% |
 
-Fresh paired `l8-a..j` comparison against `l8_flat`:
+- **Lesson:** a stronger lateness penalty makes `opt` safe (worst 91.4%), but it is only +€2.4k over 20 weeks vs `l8`: too thin to switch. Buying trust with lower prices loses money at every strength: the extra wins come at prices that don't pay.
 
-| Strategy | Total margin | Overall on time | Worst week | Ranked |
-|---|---:|---:|---:|---:|
-| `l8_flat` | €95,102 | 96.6% | 95.7% | 10/10 |
-| Expected profit, backlog cost 0.04 | €98,767 (+€3,665) | 94.2% | **88.6%** | 9/10 ✗ |
-| Expected profit, backlog cost 0.06 | €88,957 (−€6,145) | 93.8% | **89.5%** | 9/10 ✗ |
+## Experiment 30: price per delivery place (competitor's lane prices) ✓ adopted (+4.1%)
 
-On `l8-j`, baseline had 2/56 late Monday orders; the 0.04 candidate had 11/81. At 17:00, late orders were 3/12 for baseline, 5/13 for 0.04 and 5/10 for 0.06. The samples are small, but they show why aggregate margin and on-time share can hide a failing week. Raising the blanket backlog penalty did not fix the risk and reduced margin.
+- **Why:** the top teams win ~400 orders/week vs our ~255 at the same margin per order. HANDBOOK: the competitor's price per lane is "higher where little work comes back and where few drivers live near the delivery place", and this part is "almost the same in every world".
+- **Check** (`analysis/lanes.py`, 19,450 random-price quotes from the two explore runs): adding one indicator per delivery place to the win model improves log loss on *other worlds* (fit on seeds a–e, test on f–j) from 0.458 to 0.436. The pickup place adds nothing.
+- **Offsets** (`lanes.json`, x list price): Vantaa −0.17, Helsinki −0.10, Hyvinkää −0.09, Espoo −0.05 … Joensuu +0.18, Ylivieska +0.18, Savonlinna +0.17, Kemi +0.16. New rule `dest_k`: price + dest_k × offset.
 
-### Experiment 30: guard the optimizer, then hold out `l8z`
+| `l8` + dest_k | l8 | l8x | l8y | Worst |
+|---|---|---|---|---|
+| 0 (previous `l8`, now `l8_v3`) | €95,102 | €99,994 | €112,847 | 92.6% |
+| **1.0** | **€99,661** | **€104,324** | **€116,611** | **91.5%** (l8x-b, always our hardest week) |
+| 1.5 | €95,749 | | | 95.6% |
 
-Use expected-profit pricing only when fitted late risk is ≤ 8% and driverless backlog is < 3. Cap the price change to ±6% of the flat quote; otherwise fall back to `l8_flat`. Keep the existing 8 h slack and 550 km filters and the same driver fee schedule.
+- **Lesson:** +€12,653 over 30 weeks (+4.1%), on weeks the table was not fitted on as well (l8x, l8y). The fitted size (1.0) is the best. Adopted into `l8`.
 
-| Matched seeds | `l8_flat` | Guarded | Margin gain | Worst on time (flat → guarded) | Ranked |
+## Experiment 31: learn the week's competitor price level ✗ (not safe enough)
+
+- **Idea:** the competitor's level differs by week (26–54% above list) and moves during it. At each quote the win model (+ delivery-place offsets) predicts our win chance; each answer moves `market` by `market_lr × (won − expected)`, and our price by `market` (x list). New `pricing.win_chance`, `Desk.market`; off by default.
+- **Trace** (`l8x-b`, step 0.003): Mon 24 wins vs 36 expected, Tue–Thu close, **Fri 47 vs 10**: the competitor gets much dearer by Friday (it raises prices for dealers we rarely win).
+
+| `l8` + market_lr | l8 | l8x | l8y | Worst |
+|---|---|---|---|---|
+| 0 (`l8`) | €99,661 | €104,324 | €116,611 | 91.5% |
+| 0.003 | €99,445 | | | 96.6% |
+| 0.01 | €96,866 | | | 93.8% |
+| 0.01, raise only | €95,809 | | | 96.5% |
+| 0.01, lower only | €102,402 | €106,574 | €115,725 | **90.6%** (l8y-a) ✗ |
+| 0.01, lower only, at most −0.1 | €99,316 | €103,315 | | 93.8% |
+
+- **Lesson:** raising the price when we win more than expected loses (the extra wins were worth having). Lowering when we lose more gains +€4.1k over 30 weeks only when it may go down to −0.2×, and then a fresh week falls under 91%. Same pattern as before: cheaper prices win orders we then deliver late.
+
+## Experiment 32: weekday prices ✗
+
+- **Weekday in the win model** (random-price quotes, fit on seeds a–e, test on f–j): log loss on other worlds gets *worse* (0.436 → 0.454). The competitor's day factor is new in every world (HANDBOOK), so a weekday table would fit noise.
+- **Monday only** (`monday_add`, off): −0.2× → €96,361 on l8 (vs €99,661); +0.2× → €98,884. Cheaper Mondays don't build enough trust to pay; dearer ones lose the few Monday wins. Monday price doesn't matter.
+
+## Experiment 33: return-trip offers ✗
+
+- **Idea** (HANDBOOK: an offer "reaches a driver who finishes one of your gigs far from home"): when a driver delivers our car, offer them directly our open gig that starts within `return_km` of there and ends nearer their home (`return_mult` × the app's current fee; `Desk.offer_return`). Off by default.
+
+| On l8-a | Offers | Accepted | Declined | Expired (unread) | Margin |
+|---|---|---|---|---|---|
+| off (`l8`) | | | | | €13,272 |
+| fee 1.0×, ≤ 60 km | 41 | **3** | 18 | 19 | €12,769 |
+| fee 1.1×, ≤ 150 km | 104 | **1** | 52 | 48 | €13,140 |
+
+- **Lesson:** drivers who have just delivered don't take a second gig from us: half don't read the offer, half say no, even above the app's fee. Same as Exp. 18: direct offers don't work in this world for us. Not benchmarked further.
+
+## Experiment 34: guarded expected-profit pricing on lane-aware `l8` ✗ (holdout does not support adoption)
+
+- **Bottleneck:** historical outcomes show that the model misses some delivery risk on longer jobs. Across the paired baseline and guarded `l8u-g` outcomes (429 won orders total), late share was elevated at 300–399 km (20.0%), 400–499 km (22.5%), and for `next_day` options (16.6%). Both `l8u-g` runs missed the 90% cutoff; the guarded candidate did not fix that failure.
+- **Change:** experimental `l8_guarded` keeps the lane-aware `l8` quote as fallback, uses expected-profit prices only when fitted lateness is ≤8% and backlog is below 3, and caps each price change to ±6% of list. Existing distance and deadline filters remain active.
+
+| Identical seeds | `l8` margin | `l8_guarded` margin | Difference | Ranked (`l8` / guarded) | Worst on time (`l8` / guarded) |
 |---|---:|---:|---:|---:|---:|
-| `l8-a..j` (tuning) | €95,102 | €96,019 | +€916 | 95.7% → 94.6% | 10/10 → 10/10 |
-| `l8z-a..j` (fresh holdout) | €94,432 | €95,607 | +€1,175 | 93.3% → 94.6% | 10/10 → 10/10 |
-| **Combined 20 weeks** | **€189,534** | **€191,625** | **+€2,091 (+1.1%)** | **93.3% → 94.6% worst** | **20/20** |
+| Tune `l8w-a..j` | €109,250 | €111,292 | +€2,042 | 10/10 / 10/10 | 92.62% / 93.49% |
+| Fresh holdout `l8v-a..j` | €99,006 | €99,085 | +€79 | 10/10 / 10/10 | 91.79% / 92.76% |
+| Fresh holdout `l8u-a..j` | €91,695 | €87,952 | −€3,744 | 9/10 / 9/10 | 88.84% / 89.25% |
+| Both fresh holdouts, 20 weeks | €190,701 | €187,037 | **−€3,664** | 19/20 / 19/20 | 88.84% / 89.25% |
 
-**Decision:** promote the guarded strategy to `l8`; retain the prior flat strategy as `l8_flat`. The holdout increased margin and improved the worst-week on-time share, so this evidence supports the added pricing complexity. The two unguarded variants remain rejected.
+- **Decision:** keep lane-aware `l8` as the production preset; do not promote `l8_guarded`. The tune-set gain did not repeat on fresh holdouts, and the candidate lost margin there while neither strategy met the 90% requirement in one `l8u` week. `l8_guarded` remains available for further experiments only. The risk slices above are diagnostic signals from two paired outcomes, not a calibrated causal estimate.

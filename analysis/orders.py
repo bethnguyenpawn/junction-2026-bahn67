@@ -1,7 +1,8 @@
 """Per-order view of ended worlds: which orders are late or lose money, by distance, town, option, hour.
 
-    python analysis/orders.py --note "L8 baseline: starter behaviour"
+python analysis/orders.py --note "L8 baseline: starter behaviour"
 """
+
 from __future__ import annotations
 
 import sys
@@ -53,22 +54,36 @@ def main():
             leg = r["legs"][0]
             km = roads[(leg["pickup"]["placeId"], leg["delivery"]["placeId"])]["km"]
             ref = r["referenceFeeCents"]
-            orders.append({
-                "km": km, "late": r["id"] in late, "margin": money.get(r["id"], 0),
-                "list": next(o["listPriceCents"] for o in r["options"] if o["kind"] == rr["option"]),
-                "feemult": (max(booked[r["id"]]) / (ref / len(r["legs"]))) if booked.get(r["id"]) else None,
-                "from": places[leg["pickup"]["placeId"]], "to": places[leg["delivery"]["placeId"]],
-                "option": rr["option"], "hour": (r["arrivedAt"] % 1440) // 60, "day": r["arrivedAt"] // 1440,
-                "legs": len(r["legs"]), "private": leg["pickup"]["privateAddress"] or leg["delivery"]["privateAddress"],
-                "reflist": ref / r["options"][0]["listPriceCents"],
-            })
+            orders.append(
+                {
+                    "km": km,
+                    "late": r["id"] in late,
+                    "margin": money.get(r["id"], 0),
+                    "list": next(o["listPriceCents"] for o in r["options"] if o["kind"] == rr["option"]),
+                    "feemult": (max(booked[r["id"]]) / (ref / len(r["legs"]))) if booked.get(r["id"]) else None,
+                    "from": places[leg["pickup"]["placeId"]],
+                    "to": places[leg["delivery"]["placeId"]],
+                    "option": rr["option"],
+                    "hour": (r["arrivedAt"] % 1440) // 60,
+                    "day": r["arrivedAt"] // 1440,
+                    "legs": len(r["legs"]),
+                    "private": leg["pickup"]["privateAddress"] or leg["delivery"]["privateAddress"],
+                    "reflist": ref / r["options"][0]["listPriceCents"],
+                }
+            )
     n = len(orders)
-    print(f"{len(wids)} worlds, {n} won orders, late {sum(o['late'] for o in orders) / n:.1%}, "
-          f"margin/order €{sum(o['margin'] for o in orders) / n / 100:,.2f}")
+    print(
+        f"{len(wids)} worlds, {n} won orders, late {sum(o['late'] for o in orders) / n:.1%}, "
+        f"margin/order €{sum(o['margin'] for o in orders) / n / 100:,.2f}"
+    )
     by = lambda f: (lambda g: [g[f(o)].append(o) for o in orders] and g)(defaultdict(list))
     table("By distance (km)", by(lambda o: min(int(o["km"] // 100) * 100, 600)), lambda k: f"{k}-{k + 99}")
     table("By option", by(lambda o: o["option"]))
-    table("By weekday of request", by(lambda o: o["day"]), lambda k: ["Mon", "Tue", "Wed", "Thu", "Fri"][k] if k < 5 else k)
+    table(
+        "By weekday of request",
+        by(lambda o: o["day"]),
+        lambda k: ["Mon", "Tue", "Wed", "Thu", "Fri"][k] if k < 5 else k,
+    )
     table("By hour of request", by(lambda o: o["hour"]), lambda k: f"{k:02d}:00")
     table("By legs / private", by(lambda o: f"{o['legs']} legs, private={o['private']}"))
     table("By pickup town", by(lambda o: o["from"]), min_n=150)
