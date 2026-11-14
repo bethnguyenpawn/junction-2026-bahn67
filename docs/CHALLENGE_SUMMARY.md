@@ -40,7 +40,7 @@ The core trade-off: a **low fee** earns more per car but may find no driver, so 
 ## Leaderboards and the final
 
 - **Ranking rounds** (practice rankings): 5 secret weeks per level, the same for every team, played once each with `board: true`. A rank only after all 5, each ≥ 90% on time. Rounds open Sat 00, 09, 12, 15, 18, 21 and Sun 00, 03, 06. **They do not count for the final**; they show where we stand. House starter = the kit's starter; House best = the organisers' best bot. Ranking runs can't be revealed or forked.
-- **The final:** Sunday 08:00, one secret level-8 week, live clock (~34 min; a weekday hour = 18 s). Our program must run by itself, survive restarts and keep up. The 10 ranked teams with the highest margin present to the jury.
+- **The final:** Sunday 09:00 (moved from 08:00), one secret level-8 week, live clock (~34 min; a weekday hour = 18 s). Our program must run by itself, survive restarts and keep up. The 10 ranked teams with the highest margin present to the jury.
 - **The jury** ignores margin once we are in the top 10. It judges: **elegant** (few parts, each with a reason), **clear** (we can explain how it decides), **creative** (an unexpected idea), **robust** (good on unseen weeks, survives restarts). For each big idea: the idea, why, and the measured effect with and without it on the same weeks.
 
 ## Submission (Junction platform)

@@ -10,6 +10,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
+import notes
 import pricing
 from config import DAY, DEFAULT, HOUR, PRESETS, Params, from_overrides
 from dispatch import Desk, fee_schedule, maximum_cardinality_matching, next_plan_at, steep_schedule
@@ -60,6 +61,15 @@ class Pricing(unittest.TestCase):
         self.assertEqual(quote(request([SAME, NEXT]), 8, p, drive_min=120), {"next_day": 18000})
         # nothing left -> decline at 10x list
         self.assertEqual(quote(request([SAME]), 8, p, drive_min=120), {"same_day": 100000})
+
+    def test_slack_counts_the_deadline_moved_by_a_later_ready_day(self):
+        req = request([NEXT])  # Tuesday 20:00
+        req["legs"] = [{"pickup": {"window": {"from": NOON}}}]
+        option = req["options"][0]
+        same_day = notes.Facts(ready=NOON + 4 * HOUR)  # ready Monday 16:00: waits 4 h, the deadline stays
+        self.assertEqual(pricing.slack(req, option, pricing.Situation(facts=same_day)), 32 * HOUR - 4 * HOUR)
+        next_day = notes.Facts(ready=DAY + 10 * HOUR)  # ready Tuesday 10:00: waits 22 h, the deadline moves a day
+        self.assertEqual(pricing.slack(req, option, pricing.Situation(facts=next_day)), 32 * HOUR - 22 * HOUR + DAY)
 
     def test_later_mult_only_changes_later_options(self):
         p = Params(quote_mult=1.5, min_slack_h=1, later_mult=1.1)
@@ -258,6 +268,114 @@ class Chains(unittest.TestCase):
         self.assertTrue(all(c.index("C") == 0 for c in chains if "C" in c))
 
 
+class ChainPartners(unittest.TestCase):
+    """Desk.chain_partners: a request that one driver could carry with a held car gets fit_cut off its price."""
+
+    desk = Chains.desk
+
+    def request(self, start, end):
+        window = {"from": 0, "to": DAY}
+        leg = {"pickup": {"placeId": start, "privateAddress": False, "window": window}}
+        leg["delivery"] = {"placeId": end, "privateAddress": False, "window": window}
+        return {"legs": [leg], "options": [{"kind": "same_day", "deadline": DAY}]}
+
+    def test_counts_held_cars_before_or_after_it(self):
+        desk = self.desk(3)
+        desk.held = {"A": None}  # x -> y
+        self.assertEqual(desk.chain_partners(self.request("y", "z")), 1)  # after A
+        self.assertEqual(desk.chain_partners(self.request("z", "x")), 1)  # before A
+        self.assertEqual(desk.chain_partners(self.request("q", "r")), 0)  # no road: too far
+
+    def test_charging_stop_minutes_count_in_the_timing(self):
+        desk = self.desk(3)
+        desk.p = Params(pair_km=30, pair_margin_h=0, pair_lead_min=0)
+        first, second = ("x", "y", 0, 60, 0), ("y", "z", 0, 130, 0)  # 60 min drive, no link, 60 min drive
+        self.assertEqual(desk.link_minutes(first, second), 0)
+        self.assertIsNone(desk.link_minutes(first, ("y", "z", 0, 130, 40)))  # +40 min charging: 160 > 130
+
+    def test_fit_cut_lowers_the_price(self):
+        req = request([SAME])
+        self.assertEqual(quote(req, 8, Params(quote_mult=1.4, fit_cut=0.1), partners=1)["same_day"], 13000)
+        self.assertEqual(quote(req, 8, Params(quote_mult=1.4, fit_cut=0.1), partners=0)["same_day"], 14000)
+
+
+class NextOffer(unittest.TestCase):
+    """Desk.offer_next: a driver who books gig A is offered our unbooked gig B that starts where A ends."""
+
+    desk = Chains.desk
+
+    def setUp(self):
+        self.d = self.desk(3)
+        self.d.p = Params(next_offer_mult=1.0, pair_km=30, pair_margin_h=1, pair_lead_min=60)
+        for oid in "AB":
+            stops = self.d.single_stops(oid)
+            self.d.posts[f"g{oid}"] = {
+                "type": "post",
+                "stops": stops,
+                "audience": {},
+                "schedule": [{"at": 0, "feeCents": 5000}],
+            }
+            self.d.leg_gigs[oid] = {0: f"g{oid}"}
+        self.d.booked = {"gA"}
+        self.d.drivers = {
+            "d1": {"id": "d1", "rating": 5.0, "completedGigs": 99, "licence": "manual", "homePlaceId": "x"}
+        }
+
+    def test_offers_the_car_that_starts_where_the_booked_gig_ends(self):
+        self.d.offer_next("gA", "d1")
+        self.assertEqual(self.d.outbox, [{"type": "offer", "gigId": "gB", "driverId": "d1", "feeCents": 5000}])
+
+    def test_no_offer_when_the_next_car_would_be_late(self):
+        self.d.orders["B"]["deadline"] = 3 * HOUR  # 60 lead + 60 + 0 + 60 drive = 180 min: misses the 1 h margin
+        self.d.offer_next("gA", "d1")
+        self.assertEqual(self.d.outbox, [])
+
+
+class HomeFee(unittest.TestCase):
+    """Desk.home_factor: a gig ending where many drivers live opens at home_fee x its fee."""
+
+    desk = Chains.desk
+
+    def test_lower_fee_where_many_drivers_live_at_the_delivery(self):
+        d = self.desk(3)
+        d.p = Params(home_fee=0.8, home_n=2)
+        d.near = {"y": [{}, {}], "z": [{}]}
+        last_a, last_b = d.single_stops("A")[-1], d.single_stops("B")[-1]  # A ends at y (2 drivers), B at z (1)
+        self.assertEqual(d.home_factor(last_a), 0.8)
+        self.assertEqual(d.home_factor(last_b), 1.0)
+        d.p = Params(home_n=2)
+        self.assertEqual(d.home_factor(last_a), 1.0)  # off by default
+
+
+class NoteReader(unittest.TestCase):
+    """note_reader=1: the note's facts reach the posted stops, the audience and the hold decisions."""
+
+    desk = Chains.desk
+
+    def setUp(self):
+        self.d = self.desk(3)
+        self.d.p = Params(note_reader=1, pair_km=30, pair_margin_h=4, pair_lead_min=60)
+        for oid in "BC":
+            self.d.requests[oid]["arrivedAt"] = 0
+        self.d.requests["A"] = {
+            "referenceFeeCents": 5000,
+            "legs": [{}],
+            "arrivedAt": 0,
+            "note": {"text": "Ei kilpiä, siirtokilvet mukaan. Manuaali. Perillä klo 15 mennessä.", "language": "fi"},
+        }
+
+    def test_plates_deadline_and_licence(self):
+        pickup, delivery = self.d.single_stops("A")
+        self.assertTrue(pickup["withPlates"])
+        self.assertEqual(delivery["window"]["to"], 15 * HOUR)
+        self.assertTrue(self.d.manual(["A", "B"]))
+        self.assertFalse(self.d.manual(["B"]))
+
+    def test_earlier_deadline_moves_the_last_pickup(self):
+        self.assertEqual(self.d.last_pickup(self.d.orders["A"]), DAY - 2 * HOUR - (DAY - 15 * HOUR))
+        self.assertEqual(self.d.last_pickup(self.d.orders["B"]), DAY - 2 * HOUR)
+
+
 class Config(unittest.TestCase):
     def test_overrides_use_field_types_not_preset_values(self):
         p = from_overrides(["decline_km=450.5", "raise_steps=4"], PRESETS["l8"])
@@ -279,6 +397,7 @@ class Config(unittest.TestCase):
                 "l8_plan",
                 "l8_plan2",
                 "l8_chain",
+                "l8_notes",
                 "l8_plan_match",
                 "l8_guarded",
                 "l8_v3",

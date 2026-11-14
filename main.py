@@ -3,8 +3,8 @@
     python main.py --level 1 --seed l1-a [--set open_mult=0.9 ...]
     python main.py --final
 
-    python main.py --board --level 8 --preset l8_plan2   # one RANKING run: counts on the practice leaderboard
-    python main.py --world WORLD_ID --preset l8_plan2    # continue a world that stopped (e.g. a server restart)
+    python main.py --board --level 8 --preset l8_notes   # one RANKING run: counts on the practice leaderboard
+    python main.py --world WORLD_ID --preset l8_notes    # continue a world that stopped (e.g. a server restart)
 
 A ranking run plays the next secret week of the current round (5 per level per round, each once).
 It can't be revealed or forked, and deleting it doesn't remove it, so we never auto-delete one.
@@ -50,7 +50,14 @@ def load_env(
 
 def load_near(world: World, params: Params) -> dict | None:
     """Drivers living near each place, from the world's driver list; only when a rule uses it (one extra read)."""
-    if not (params.dense_n or params.sparse_n or params.offer_mult or params.return_mult):
+    if not (
+        params.dense_n
+        or params.sparse_n
+        or params.offer_mult
+        or params.return_mult
+        or params.next_offer_mult
+        or params.home_fee != 1.0
+    ):
         return None
     return drivers_near(world.roster(), places_of(world.client))
 
@@ -112,20 +119,25 @@ def play_final(world: World, params: Params) -> None:
         day = desk.now // DAY
         desk.now = world.client.final()["now"] if event is None else max(desk.now, event["at"])
         if event is not None:
-            try:
-                desk.handle(event)
-            except Exception:  # one odd event must not stop the week: log it, skip it, go on
-                print(
-                    f"Skipped event {event.get('seq')} ({event.get('kind')}):",
-                    file=sys.stderr,
-                )
-                traceback.print_exc()
-        desk.tick()
+            guarded(f"event {event.get('seq')} ({event.get('kind')})", desk.handle, event)
+        guarded("tick", desk.tick)
         desk.send()
         if desk.now // DAY > day:
             report(WEEKDAYS[day % 7], world.score())
         if desk.now >= snapshot["endsAt"]:
             return
+
+
+def guarded(what: str, step, *args) -> None:
+    """Runs one desk step of the final; an error is logged and skipped, so one odd event or plan does not stop the
+    week or lose the other actions. A lost connection still goes up to the rebuild loop."""
+    try:
+        step(*args)
+    except Unreachable:
+        raise
+    except Exception:
+        print(f"Skipped {what}:", file=sys.stderr)
+        traceback.print_exc()
 
 
 def play_practice_safely(world: World, level: int, params: Params, verbose: bool = True, rejoin: bool = False) -> Score:

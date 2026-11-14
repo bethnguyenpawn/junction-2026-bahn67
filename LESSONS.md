@@ -665,4 +665,118 @@ The 14:00 test final showed a cheap week: at ≥ 1.45× list we won 1% of quotes
 - **Candidate slot attempt:** the one-seed `l8_plan_match` pilot on `l8fresh14-a` waited 327 seconds and timed out while all eight team slots remained occupied. It created no candidate world and has no score.
 - **Benchmark (Sat 17:10, `l8` weeks):** `l8_plan_match` €113,062 vs `l8_plan` €109,576 (+3.2%), worst 94.9%, 10/10 ranked. Below `l8_chain` (€119,744).
 - **Merged into `otso/level1-baseline`:** the matching is `Desk.match_pairs`; `pair_match=1` uses it for pairs of held cars, and new `chain_match=1` starts `build_chains` from the matched pairs, then grows them into chains (not benchmarked yet). The slot wait in `evaluate.py` is kept.
-- **Decision:** keep the matching as an option; chains (`l8_chain`, Exp. 42) gain more. Next: `l8_chain` + `chain_match=1` on the `l8` weeks.
+- **`l8_chain` + `chain_match=1`** (Sat, `l8` weeks): €114,201 vs `l8_chain` €119,744 (**−€5.5k, −4.6%**), worst 93.5%. Locking in matched pairs first blocks better 3-car chains.
+- **Decision:** keep the matching as an option (off); `l8_chain` stays the candidate.
+
+## Experiment 44: learn the competitor's level per week and per day (`market.py`, `market_k`)
+
+- **Idea:** the competitor's price = list × lane × **day factor** × **week level** (1.26–1.54 at level 8) × noise (HANDBOOK). We quote a fixed 1.40. In the 14:00 test final it was cheap and we won 1% of quotes at ≥ 1.45×.
+- **Offline check** (`analysis/competitor.py`, 225 cached weeks, no worlds): one logistic win curve with a level per day; slope 8.1 per 1.0× list (pooled over weeks it looks flatter, 6.1).
+  - The level is fixed by the seed: two random-price runs of the same week agree (correlation 0.97).
+  - **Days differ more than weeks:** weeks ±0.077× list, days ±0.12–0.26×. **Monday is cheap every week (−0.21×)**: Exp. 31's learner read that as a cheap week.
+  - Predicting each answer (log loss, lower = better): one level 0.552 · + usual weekday 0.525 · **+ learned week and day 0.439**.
+- **Rule** (`market.py`): MAP estimate of the week's and today's move from all answers so far (Gaussian priors from the fit, Newton steps, 0.28 s per simulated week); price += `market_k` × move, within `market_lo`..`market_hi` (±0.1). Replaces Exp. 31's `market_lr`.
+
+| `l8_chain` + | l8 | worst |
+|---|---|---|
+| — | €119,744 | 94.1% |
+| `market_k=0.5` | €117,846 (−€1.9k) | 94.2% |
+
+- **By day** (vs a cached `l8_chain`-like run): the same wins in total (3,319 vs 3,340). On Thursday a higher price lost 76 orders (−€5.6k). As in Exp. 31, raising the price on dear days loses: we have the capacity then, and each extra order also builds trust. Next: lower only (`market_k=1 market_hi=0`).
+| `market_k=1 market_hi=0` (lower only) | €118,858 (−€0.9k) | 93.9% |
+
+- **Decision:** within noise (weeks swing ±€1.5k); `market_k` stays off. The estimate is good, but following it does not change margin on these weeks.
+
+## Test final Sat 20:00 (live, full week, `l8_chain`)
+
+- **€12,963, 334 orders, 97.6% on time, rank 41/75** (1st Juhus €19,592 / 469 orders; 10th €16,623 / 393). We earn €38.8/order, the top 10 €41–49.
+- **Where the 1,030 requests went:** won 340, lost on price 558, declined > 550 km 105, declined < 8 h slack 27.
+- `l8_chain` validated meanwhile: **l8x €132,510 (+€13.0k vs `l8_plan2`), l8y €142,551 (+€4.5k)**, worst week 90.3% (l8y-a). 30 weeks: €394,805 vs €370,005 (+6.7%).
+
+## Experiment 45: volume and cost with chains (`l8_chain` + …, `l8` weeks)
+
+| Change | l8 | worst | Note |
+|---|---|---|---|
+| — (`l8_chain`) | €119,744 | 94.1% | |
+| `quote_mult=1.35` | €115,551 (−€4.2k) | 92.2% | cheaper price still loses |
+| `decline_km=700` | €117,888 (−€1.9k) | 92.4% | long trips still lose |
+| `chain_max=4` | €117,157 (−€2.6k) | 94.4% | |
+| `pair_fee=0.75` | €111,825 (−€7.9k) | 93.3% | 2,789 orders: slower bookings → backlog brake → fewer wins |
+| `fit_cut=0.1` | €115,725 (−€4.0k) | 92.9% | 3,557 orders (+260) at a lower price |
+| `backlog_h=8` | €116,610 (−€3.1k) | 92.4% | **3,946 orders (+20%)**, margin/order €29.3 vs €35.6 |
+| `chain_private=1` (private addresses in chains) | €116,984 (−€2.8k) | 93.7% | |
+| `chain_charging=1` (charging cars in chains, +40 min in the timing) | €119,472 (−€0.3k) | 93.8% | |
+| … same on `l8x` | €125,983 (−€6.5k vs €132,510) | 91.5% | ✗ |
+| `split_after_min=240` (keep unbooked chains together longer) | €115,759 (−€4.0k) | 93.4% | |
+
+- **Drivers grab shared gigs at once** (cached chain weeks): 1-car gigs booked after a median 34 min (47% at the opening fee), 2-car gigs 3 min (70%), 3-car gigs 1 min (86%). We pay too much for shared gigs → test a lower `pair_fee`.
+- **Chain-aware pricing** (`fit_cut`, `Desk.chain_partners`): a request that one driver could carry before or after a held or posted unbooked car is quoted `fit_cut` lower (it will likely share a driver at ~0.76× fee).
+
+
+- **Why cars still go alone with chains** (140 of 336 cars/week, €68 vs €42 shared): held > 24 h without partner 36, chain split or withdrawn 30, electric car with a charging stop 26 (excluded from chains), posted alone with < 24 h left 24, private address 18.5 (excluded), trade-in 4.
+- **The backlog brake holds back volume, and that is right:** with `backlog_h=8` (count only driverless cars due for pickup within 8 h) we win 20% more orders, but the won price falls (1.357× vs 1.421×) and the fee per order rises (€56.3 vs €53.1; lone cars 1.11× typical vs 1.06×). Drivers are scarce at level 8: more volume makes every car dearer. **Only cheaper delivery (more sharing) can raise both volume and margin.**
+- **Noise:** re-running `l8_chain` on the current code gives exactly €119,744.01 (practice weeks are deterministic, and the new options are off by default). But any change sends drivers down a different path, so differences below ~€3k (2.5%) on 10 weeks are not real effects.
+
+## Experiment 46: offer the next car when a driver books (`next_offer_mult`, `Desk.offer_next`) ✗
+
+- **Idea** (HANDBOOK: a second gig costs a driver who has one of ours only the extra time, but the app never tells them of it): on `gig_booked`, offer that driver our unbooked one-car gig that starts nearest to where their gig ends and still fits after it, at its current fee. Unlike Exp. 18/33 the driver is working today and has just used the app.
+- **Result:** €118,586 on `l8` (−€1.2k, noise), worst 93.9%. In 3 weeks: 84 offers, 58 expired unread, 25 declined, **1 accepted**. Direct offers do not work in this world for us (third try); code kept, off.
+
+## Experiment 47: fees for the cheapest likely driver (`home_fee`, `home_n`, `chain_home`)
+
+- **Who books our one-car gigs** (cached chain weeks, 1,559 bookings): drivers living near the **delivery** make 6% of the views but **25% of the bookings**, at a median 0.80× typical (61% at our opening fee, median 16 min); drivers near the pickup make 45% of views, 35% of bookings at 1.00×. HANDBOOK: their trip home is free.
+- **Where the gig ends decides it:** gigs ending where 60+ drivers live within 30 km are booked by a driver living there 82% of the time (chains: 70%, 88% at the opening fee); where 0–9 live, 4%.
+- **Rule:** a gig whose last delivery has ≥ `home_n` drivers living within 30 km gets `home_fee` × its fee (`Desk.home_factor`); `chain_home=1` makes `build_chains` prefer chains ending there, like round trips.
+
+| `l8_chain` + | l8 | worst | orders |
+|---|---|---|---|
+| — | €119,744 | 94.1% | 3,296 |
+| `home_fee=0.85` | €117,028 (−€2.7k) | 93.3% | 3,118 |
+| `home_fee=0.75` | €114,485 (−€5.3k) | 91.7% | 2,982 |
+
+- **Why it loses:** the fee per car falls (shared €40 vs €42), but bookings come a little later, so more won cars have no driver at any moment and the **backlog brake** (+0.03× per driverless car) raises every quote: 5–10% fewer orders. Same as `pair_fee=0.75`. The brake couples every fee saving to a volume loss → next: a brake that counts only cars at real risk (`backlog_h`) with a higher base price.
+- **Night posting:** 11 gigs/week posted 21:00–07:00 book at a median 1.62× their opening fee (no driver reads notifications 23–07, but our ladder keeps raising): ~€200/week to save by starting their ladder at 07:00.
+- **Decoupled brake** (`backlog_h=8 quote_mult=1.46`, brake counts only cars due within 8 h, base price where the old brake sat on average): l8 €119,022 (3,533 orders, +7%), worst 92.7%; + `home_fee=0.85`: €118,679 (3,322 orders), 92.5%. Both ≈ `l8_chain` (€119,744): more orders at a lower margin each. ✗
+
+## Experiment 48: no fee raises at night (`night_hold`) ✗
+
+- **Idea:** drivers read nothing 23:00–07:00, so raise steps count only reading minutes (`reading_minutes_after`).
+- **Result:** l8 €118,276 (−€1.5k), l8x €128,971 (−€3.5k) and **one week at 89.0%** (unranked). A car posted in the evening opens the morning at its first fee, so its driver comes later. Off.
+- **Measured on the way** (cached `l8_chain` weeks): gigs posted 24–48 h ahead book at the opening fee within ~12 min (median fee 0.80× typical), so posting early is not a leak; all raises together cost ~€2.5k/week. Only 2.3 bookings/week come from drivers who just delivered nearby: holding cars for planning does not hide them from passing drivers. Driver geography barely moves the fee (lone cars 0.80–1.04× typical in every pickup × delivery density cell); it moves win rate (12–49%) and lateness.
+
+## Experiment 49: a real note reader (`notes.py`, `note_reader=1`, preset `l8_notes`) ✓
+
+- **Why:** the reader was still the starter's keyword matcher. It read only clock times, put every time on the day the window starts, treated a note that mentions the delivery as delivery-only, and ignored plates, manual gearboxes, day words ("huomenna", "to.", "Fri"), corrections ("eikun 11.30", "korjaus: klo 10", "not 3pm") and the world's typos ("huomeenna", "desitnation", "maunal"). The rules say the world acts on the note anyway. In `l8_chain` weeks the notes had warned us about 7.7 of the 8.7 failed visits a week (3.8 not ready, 3.3 no plates, 0.6 licence).
+- **How:** every word one typo from a keyword becomes the keyword. Then each sentence is read on its own: what it is about (ready / arrive by / the delivery site's hours / the pickup site's hours) and its last day and time that it does not deny; a correction sentence keeps the other half (day or time). Days count from the arrival day; a weekday is 2–6 days ahead; hours in words are 9–17. Revealed truth (`reveal.orders[].legs[]`: `readyAt`, `releasedAt`, `noteDeadline`, `pickupHours`, `deliveryHours`, `needsPlates`, `manualGearbox`) scored it on all 5,790 noted won cars of the cached weeks: ready time, deadline, closing time all right; pickup hours 5,305/5,307; plates 3 and manual 2 false alarms. The old reader: 311 ready times too early, 123 deadlines too late, 314 too early, all 252 plates/manual cars missed.
+- **Use:** pickup window from the ready time; delivery window to the earlier of the option's and the note's deadline and the site's closing time that day (a car left at a closed site counts when it next opens: late); plates stop and manual licence on the first post (also in chains); the pickup window = the first weekday interval of the site's real hours that a driver can still reach (a driver plans by the stated hours, so a multi-day window would let them come after the real closing). Quotes: the slack check uses the note's deadline and a later ready time.
+
+| `l8_chain` + | l8 | l8x | 20 weeks | Worst |
+|---|---|---|---|---|
+| — | €119,744 | €132,510 | €252,254 | 94.1% |
+| `note_reader=1` without pickup hours | €121,715 | €131,947 | +€1.4k | 92.8% |
+| **`note_reader=1`** | **€125,674** | **€134,376** | **+€7.8k (+3.1%)** | 92.8% |
+
+- **l8y (untuned weeks): €152,963 vs €142,551 (+€10.4k, +7.3%), worst 92.6% (was 90.3%).** 30 weeks: **€413,013 vs €394,805 (+€18.2k, +4.6%)**, 30/30 ranked, worst 92.6% → `l8_notes` replaces `l8_chain`.
+
+- **Per l8 week:** failed visits 8.7 → 0.3 (not ready, plates and licence → 0; closed 1.0 → 0.3), failed-visit fees €276 → €11, late orders 14.3 → 11.3, undelivered €183 → €114, on time 95.9% → 96.6%. Without pickup hours, closed-site failures rose to 4.3/week: the retry two hours later came after closing again.
+- **Left:** late orders now: booked in time but late 3.3/week, drops 2.9, order changes 2.6 (a far new destination with the same deadline, or a missed private slot moved to another day), booked only after the deadline warning 1.9.
+
+## Experiment 50: cheaper price with the note reader (`l8_notes` + `quote_mult=1.37`) ✗
+
+- **Idea:** fewer late cars leave on-time room; spend it on volume.
+- **Result:** l8 €125,034 vs €125,674 (3,474 vs 3,369 orders), worst 95.2%. More orders, same money: still no.
+
+## Experiment 51: explicit windows on every chain stop ✗ (no effect)
+
+- **Idea:** the world stretches a stop without its own window to the end of the world once no driver can make it, so a driver could book a chain that is already late (traced: a 3-car chain booked Wednesday, picked up Friday, due Thursday). Give every chain stop its order's window.
+- **Result:** l8 €125,804.35 with and without, to the cent: an explicit window equal to the order's changes nothing. Code removed.
+- **Also (Exp. 49c, now part of `note_reader`):** holds and our own deadline warning use the note's deadline and the delivery site's closing time (`Desk.last_pickup`; the world's `lastPickupAt` and `deadline_close` know only the option's deadline): l8 €125,804 (vs €125,674), worst 95.0%.
+- **Snow** (measured, not acted on): `forecast` comes exactly 24 h ahead, 1–2 snow days a week in 2–6 towns. Orders touched by snow (28/week) are late 9.8% vs 3.3%: ~1.8 extra late orders/week. Summer tyres (the note fact that snow blocks): ~1 car/week.
+
+
+## Experiment 52: code review fixes (Sat 22:00) ✓ kept (neutral)
+
+- **Quote slack with a late ready day:** a car ready N days after the stated pickup day moves the won order's deadline by N days (RULES; seen in 91 of 91 such cars). `pricing.slack` subtracted the wait but not the moved deadline, so it declined some options it could have offered. Fixed: l8 €125,036 (−€768), l8x €135,759 (+€167), l8y €149,830 (+€1,509); 30 weeks €410,625 vs €409,717 (+€908), worst 93.8%: noise, kept because it matches the rules. These are now the `l8_notes` reference numbers.
+- **Final loop:** an error in `desk.tick()` (planning, our own deadline warnings) was not caught like an error in an event, so it dropped that step's actions and rebuilt the desk. Now `main.guarded` logs and skips either; a lost connection still goes to the rebuild loop.
+- **Note reader:** 200,000 random notes (word salad from the vocabulary, random characters, empty / missing notes): no exception, 0.04 ms a note.
+- **Left as is:** `repost()` after `gig_expired` drops every window of the gig, also a pickup site's real hours (failed visits are 0.3 a week, so ≤ €11/week at stake).

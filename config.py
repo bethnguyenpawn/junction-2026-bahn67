@@ -15,6 +15,11 @@ class Params:
     # --- Quoting (levels 4+; levels 1-3 always win at list price). Price = list x quote_mult + adjustments.
     quote_mult: float = 1.0
     backlog_k: float = 0.0  # + backlog_k per won order still without a driver
+    backlog_h: float = 0.0  # Exp. 45: count only those whose last pickup is within this many hours (0 = all)
+    fit_cut: float = 0.0  # Exp. 45: - this for a request that could share a driver with a held or posted car
+    market_k: float = 0.0  # Exp. 44: + market_k x the competitor's learned level move this week and today (market.py)
+    market_lo: float = -0.1  # limits of that price change, x list
+    market_hi: float = 0.1
     dense_n: int = 0  # pickup with >= dense_n drivers living within 30 km ...
     dense_cut: float = 0.0  # ... - dense_cut
     private_add: float = 0.0  # + this when a stop is a private address (>= 5 = decline)
@@ -91,6 +96,11 @@ class Params:
     raise_per_step: float = 0.10  # added per step (levels 2+; level 1 allows one step)
     raise_every_min: int = HOUR  # minutes between steps
     raise_steps: int = 6  # steps in the schedule, so the cap is open + (steps-1)*raise
+    night_hold: int = 0  # Exp. 48 (worse): count raise_every_min only in reading hours (07-23)
+
+    # --- Notes (Exp. 49): 1 = notes.py reads ready time, deadline, closing time, plates and manual gearbox from the
+    # dealer's note (right on all 5,790 noted cars of cached weeks); 0 = the starter's keyword matcher.
+    note_reader: int = 0
 
     # --- Steep schedule after deadline_close.
     steep_open_mult: float = 1.5
@@ -116,6 +126,12 @@ class Params:
     slack_fee: float = 1.0  # Exp. 23: fee factor with >= slack_fee_h hours before lastPickupAt
     slack_fee_h: float = 24.0
     pair_fee: float = 0.0  # Exp. 24: two-car gigs; fee = pair_fee x both typical fees
+    home_fee: float = 1.0  # Exp. 47: x the fee of a gig whose last delivery has >= home_n drivers living within 30 km
+    home_n: int = 60
+    chain_home: int = 0  # Exp. 47: build_chains prefers chains ending where >= home_n drivers live, like round trips
+    next_offer_mult: float = 0.0  # Exp. 46: on a booking, offer that driver our unbooked car near where they finish
+    chain_charging: int = 0  # Exp. 45: electric cars with a charging stop may join chains (+40 min in the timing)
+    chain_fee_step: float = 0.0  # Exp. 45: - this from pair_fee for each car beyond the second
     pair_km: float = 30.0  # first car's delivery within this many road km of the second's pickup
     pair_lead_min: int = 60  # the driver starts no earlier than this many minutes from now
     pair_margin_h: float = 2.0  # both cars due at least this long after the planned delivery
@@ -127,9 +143,6 @@ class Params:
     cost_k: float = 0.0  # Exp. 26: + cost_k x (typical fee / list - cost_mid)
     cost_mid: float = 0.9
     max_legs: int = 0  # Exp. 29: decline requests with more legs (trade-ins have 2)
-    market_lr: float = 0.0  # Exp. 31: learn the week's competitor level: + this x (won - expected) per answer
-    market_lo: float = -0.2  # limits of the learned level, x list
-    market_hi: float = 0.3
     monday_add: float = 0.0  # Exp. 32: + this on Monday
     return_mult: float = 0.0  # Exp. 33: after a delivery, offer the driver our open gig towards home at this x fee
     return_km: float = 60.0  # ... if its first pickup is within this many road km
@@ -217,6 +230,10 @@ PRESETS["l8_plan2"] = replace(PRESETS["l8_plan"], quote_mult=1.40, pair_km=50)
 # CANDIDATE: l8_plan2 + chains of up to 3 cars from held cars and posted unbooked gigs, planned every hour (Exp. 42).
 # l8 €119,744 (+6.5%), worst week 94.1%. Not yet checked on l8x and l8y.
 PRESETS["l8_chain"] = replace(PRESETS["l8_plan2"], chain_max=3, plan_every_h=1)
+
+# Exp. 49: + the note reader (notes.py): ready time, deadline, site hours, plates, manual gearbox from the dealer's
+# note. Failed visits 8.7 -> 0.3/week, late orders 14.3 -> 11.3/week; +€7.8k on l8 + l8x.
+PRESETS["l8_notes"] = replace(PRESETS["l8_chain"], note_reader=1)
 
 PRESETS["l8_guarded"] = replace(
     PRESETS["l8"], opt=1, opt_backlog=0.04, opt_guard_late=0.08, opt_guard_backlog=3, opt_delta_cap=0.06

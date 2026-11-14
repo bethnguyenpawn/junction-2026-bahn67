@@ -20,6 +20,7 @@ from typing import NamedTuple
 
 from spread.types import DeliveryOption, PriceRequest
 
+import notes
 from config import DAY, HOUR, Params
 
 # How much dearer (+) or cheaper (-) the competitor is for cars going to each place, x list price.
@@ -43,8 +44,10 @@ class Situation(NamedTuple):
     adapt: float = 0.0  # win-rate adjustment (Params.adapt_*)
     outage: bool = False  # the competitor looks down near the pickup (Params.outage_*)
     war: bool = False  # the competitor looks 20% cheaper today (Params.war_*)
-    market: float = 0.0  # this week's competitor price level vs the model's average, x list (Params.market_lr)
+    market: float = 0.0  # the competitor's learned level move this week + today vs a usual day, x list (market.py)
     dealer_requests: int = 0  # requests this dealer has sent this week, this one included
+    partners: int = 0  # held or posted unbooked cars this car could share a driver with (Params.fit_cut)
+    facts: notes.Facts | None = None  # what the note says (Params.note_reader), None = not read
     monday: bool = False
 
 
@@ -107,10 +110,14 @@ def price_flat(request: PriceRequest, option: DeliveryOption, level: int, params
 def flat_mult(request: PriceRequest, level: int, params: Params, s: Situation) -> float:
     """The flat rules: quote_mult + backlog brake + adjustments for the request's situation."""
     p = params
-    mult = p.quote_mult + p.backlog_k * s.backlog + s.adapt + s.market
+    mult = p.quote_mult + p.backlog_k * s.backlog + s.adapt
+    if p.market_k:  # follow the competitor's learned level, within limits
+        mult += min(p.market_hi, max(p.market_lo, p.market_k * s.market))
     if p.explore_hi:  # research: a random price per request, to measure how the win chance falls with price
         u = zlib.crc32(request["id"].encode()) % 10000 / 10000
         mult = p.explore_lo + (p.explore_hi - p.explore_lo) * u
+    if p.fit_cut and s.partners:  # likely to share a driver: cheaper for us, so win more of these
+        mult -= p.fit_cut
     if p.big_n and s.dealer_requests >= p.big_n:
         mult -= p.big_cut
     if p.cost_k:  # our cost follows the typical fee; the competitor's price follows the list price
@@ -149,7 +156,7 @@ def best_price(request: PriceRequest, option: DeliveryOption, params: Params, s:
     if p.opt_trust_gain and s.trust < TRUST_CAP:
         gain = (1 - late) * p.opt_trust_gain * listed * later_requests(request, s)
     best, best_value = None, 0.0
-    for k in range(int(round((p.opt_hi - p.opt_lo) / 0.02)) + 1):
+    for k in range(round((p.opt_hi - p.opt_lo) / 0.02) + 1):
         m = p.opt_lo + 0.02 * k
         value = logistic(win0 + p.win_mult * (m - dest - s.market)) * (
             m * listed * (1 - late * p.opt_late_refund) - fee - lost_trust + gain
@@ -187,13 +194,11 @@ def win_base(params: Params, s: Situation) -> float:
     )
 
 
-def win_chance(request: PriceRequest, prices: dict, params: Params, s: Situation) -> float:
-    """The model's chance that the dealer takes one of our prices, if the competitor's prices are at the average
-    level + the delivery place's offset + s.market. Our cheapest option counts."""
+def relative_price(request: PriceRequest, prices: dict) -> float:
+    """Our cheapest quoted option x list, minus the delivery place's offset: the price the dealer compares."""
     lists = {o["kind"]: o["listPriceCents"] for o in request["options"]}
     mult = min(price / lists[kind] for kind, price in prices.items())
-    dest = DEST_OFFSET.get(request["legs"][0]["delivery"]["placeId"], 0.0)
-    return logistic(win_base(params, s) + params.win_mult * (mult - dest - s.market))
+    return mult - DEST_OFFSET.get(request["legs"][0]["delivery"]["placeId"], 0.0)
 
 
 def later_requests(request: PriceRequest, s: Situation) -> float:
@@ -203,8 +208,16 @@ def later_requests(request: PriceRequest, s: Situation) -> float:
 
 
 def slack(request: PriceRequest, option: DeliveryOption, s: Situation) -> int:
-    """Minutes to spare: the option's deadline - the drive - the quote's decision time."""
-    return option["deadline"] - s.drive_min - request["respondBy"]
+    """Minutes to spare: the option's deadline - the drive - the quote's decision time; with the note read, its
+    deadline and closing time count, and a ready time later than the stated one costs the wait. A car ready N days
+    after the stated day moves the won order's deadline by N days (RULES; seen in 91 of 91 such orders)."""
+    if s.facts is None:
+        return option["deadline"] - s.drive_min - request["respondBy"]
+    stated_from = request["legs"][0]["pickup"]["window"]["from"]
+    ready = s.facts.ready or 0
+    wait = max(0, ready - max(request["respondBy"], stated_from))
+    moved = max(0, ready // DAY - stated_from // DAY) * DAY
+    return notes.due(s.facts, option["deadline"] + moved) - s.drive_min - request["respondBy"] - wait
 
 
 def private(request: PriceRequest) -> bool:
