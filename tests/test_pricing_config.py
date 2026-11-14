@@ -183,7 +183,7 @@ class Config(unittest.TestCase):
 
     def test_presets_exist(self):
         self.assertEqual(
-            set(config.PRESETS), {"starter", "l1", "l8", "l8_plan", "l8_guarded", "l8_v3", "l8_v2", "l8_v1"}
+            set(config.PRESETS), {"starter", "l1", "l8", "l8_plan", "l8_plan2", "l8_guarded", "l8_v3", "l8_v2", "l8_v1"}
         )
         self.assertIs(PRESETS["starter"], DEFAULT)
 

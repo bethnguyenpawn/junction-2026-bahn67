@@ -155,7 +155,7 @@ PRESETS = {
         private_add=0.2,
         dest_k=1.0,
     ),
-    # CURRENT BEST, used for ranking runs and the final: l8 + batch planning of two-car gigs (Exp. 37).
+    # l8 + batch planning of two-car gigs (Exp. 37).
     # l8x €116,121 (l8: €104,324), worst week 93.2%; ranking round "Saturday 12:00": €71,409 in 5 weeks, worst 94.9%.
     "l8_plan": Params(
         quote_mult=1.45,
@@ -202,6 +202,10 @@ PRESETS = {
 
 # Experimental expected-profit pricing, based on the current lane-aware l8 quote. Use only for low-risk requests;
 # preserve the proven delivery-place, distance, deadline and driver fee rules through the flat-price fallback.
+# CURRENT BEST: l8_plan + price 1.40x and pair links up to 50 km (Exp. 41). l8 €112,459, l8x €119,506
+# (+€5,802 over 20 weeks vs l8_plan), l8y €138,040; worst week 91.9%, 30/30 ranked.
+PRESETS["l8_plan2"] = replace(PRESETS["l8_plan"], quote_mult=1.40, pair_km=50)
+
 PRESETS["l8_guarded"] = replace(
     PRESETS["l8"], opt=1, opt_backlog=0.04, opt_guard_late=0.08, opt_guard_backlog=3, opt_delta_cap=0.06
 )

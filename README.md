@@ -43,16 +43,17 @@ The week should end with about `margin € 13,272   305 orders   95.4% on time  
 ## Commands
 
 ```bash
-python main.py --level 8 --seed l8-a --preset l8_plan                    # one practice week
-python evaluate.py --level 8 --preset l8_plan                            # benchmark: 10 fixed weeks, ~2 min
-python evaluate.py --level 8 --preset l8_plan --seed-prefix l8x          # the same on 10 other weeks
-python evaluate.py --level 8 --preset l8_plan --set quote_mult=1.4 --note "idea"   # try one change
+python main.py --level 8 --seed l8-a --preset l8_plan2                   # one practice week
+python evaluate.py --level 8 --preset l8_plan2                           # benchmark: 10 fixed weeks, ~2 min
+python evaluate.py --level 8 --preset l8_plan2 --seed-prefix l8x         # the same on 10 other weeks
+python evaluate.py --level 8 --preset l8_plan2 --set pair_fee=0.8 --note "idea"   # try one change
 python analysis/orders.py --note "idea"                                  # which orders were late / lost money
-python main.py --board --level 8 --preset l8_plan                       # ranking run: only one at a time per team
-python main.py --final --preset l8_plan                                  # the final (live clock)
+python main.py --board --level 8 --preset l8_plan2                      # ranking run: only one at a time per team
+python main.py --final --preset l8_plan2                                 # the final (live clock)
+python main.py --world WORLD_ID --preset l8_plan2                        # continue a world that stopped (e.g. server restart)
 ```
 
-- **Presets** (`config.py`): **`l8_plan` is the current best**, used for ranking runs and the final. `l8` is the same without batch planning, `l8_guarded` is an experiment that was not adopted (Exp. 38), `starter` = the official starter, and the `l8_v*` presets are older versions. `--set name=value` changes any parameter.
+- **Presets** (`config.py`): **`l8_plan2` is the current best**, used for ranking runs and the final: `l8_plan` (batch planning) with price 1.40× and pair links up to 50 km. `l8` is without batch planning, `l8_guarded` is an experiment that was not adopted (Exp. 38), `starter` = the official starter, and the `l8_v*` presets are older versions. `--set name=value` changes any parameter.
 - **Test weeks:** tune on the `l8-a..j` weeks, confirm on `l8x`, and use `l8y` only as a final check. Each `evaluate.py` run is logged in `results/log.jsonl`.
 - **Ranking runs** (`--board`) only when the team agrees: 5 per round, and they can't be undone.
 
@@ -60,7 +61,7 @@ python main.py --final --preset l8_plan                                  # the f
 
 | File | What it is for |
 |---|---|
-| `main.py` | Starts a world and runs it: the practice loop (`advance`) or the final loop (live events). Recovers after errors. |
+| `main.py` | Starts a world and runs it: the practice loop (`advance`) or the final loop (live events). Rebuilds from the world after errors and server restarts; `--world` continues a stopped world. |
 | `dispatch.py` | The `Desk`: turns each event into actions (quote, post a gig, raise a fee, retry a failed pickup). |
 | `pricing.py` | The price for each request, or a decline. |
 | `config.py` | Every tunable number (`Params`) and the presets. |
@@ -104,11 +105,11 @@ We use the official `spread` Python kit. It sends HTTPS + JSON to `https://sprea
 
 Winning means picking good numbers. All of them live in `Params` in `config.py`, and a preset is one set of them. Try a change without editing code: `--set name=value`.
 
-### Parameters used by `--preset l8_plan`
+### Parameters used by `--preset l8_plan2`
 
 | Parameter | Value | What it does | Why this value |
 |---|---|---|---|
-| `quote_mult` | 1.45 | Base price = list price × this | The competitor is 26–54% above list; profit per request is flat from 1.1× to 1.4×, and cheaper prices win orders we then deliver late |
+| `quote_mult` | 1.40 | Base price = list price × this | The competitor is 26–54% above list. 1.45 without planning (cheaper won cars we then delivered late); with planning 1.40 is safe (Exp. 41) |
 | `backlog_k` | 0.03 | +0.03× per won order that has no driver yet | Slows winning when we're overloaded |
 | `dense_n`, `dense_cut` | 40, 0.2 | −0.2× where ≥ 40 drivers live within 30 km of the pickup | Those cars are easy to move (Exp. 17, 21) |
 | `private_add` | 0.2 | +0.2× when a stop is a private address | Private addresses are late ~3× as often (Exp. 20) |
@@ -119,7 +120,7 @@ Winning means picking good numbers. All of them live in `Params` in `config.py`,
 | `raise_per_step`, `raise_every_min`, `raise_steps` | 0.1, 30, 6 | +0.1× every 30 min, up to 1.3× | Best tested as one schedule for all cars |
 | `steep_*` | defaults | After the deadline warning: 1.5×, +0.25× every 30 min, up to 2.5× | Last chance to find a driver |
 | `plan_every_h` | 3 | Batch planning: hold won cars with ≥ 8 h (`hold_h`) to their latest pickup; every 3 h (07:00–19:00) pair them into two-car gigs | One driver delivers two cars: ~45% more orders (Exp. 37) |
-| `pair_km`, `pair_margin_h` | 30, 4 | Pair car A with car B if B's pickup is ≤ 30 km from A's delivery and both arrive ≥ 4 h before their deadline | Round trips first, then the shortest link |
+| `pair_km`, `pair_margin_h` | 50, 4 | Pair car A with car B if B's pickup is ≤ 50 km from A's delivery and both arrive ≥ 4 h before their deadline | Round trips first, then the shortest link; 50 km finds more partners than 30, 80 is too far (Exp. 40–41) |
 | `pair_fee` | 0.9 | A two-car gig pays 0.9× both typical fees | Pairs are booked within a minute |
 | `wait_h` | 24 | An unpaired car waits for the next plan only with ≥ 24 h to spare, else it's posted alone | Cars held too long were late 19% |
 | `split_after_min` | 120 | A pair nobody books within 2 h is split into two one-car gigs | Fixed three weeks under 90% |
@@ -145,11 +146,11 @@ Also tested: reacting to the competitor's outage day (`outage_add`, Exp. 34) and
 ### How to test a change
 
 ```bash
-python evaluate.py --level 8 --preset l8_plan --set quote_mult=1.4 --note "plan q1.4"                    # 10 tuning weeks
-python evaluate.py --level 8 --preset l8_plan --seed-prefix l8x --set quote_mult=1.4 --note "x: plan q1.4"   # 10 holdout weeks
+python evaluate.py --level 8 --preset l8_plan2 --set pair_fee=0.8 --note "pf0.8"                    # 10 tuning weeks
+python evaluate.py --level 8 --preset l8_plan2 --seed-prefix l8x --set pair_fee=0.8 --note "x: pf0.8"   # 10 holdout weeks
 ```
 
-Compare with `l8_plan`: €109,576 on the tuning weeks, €116,587 on `l8x` (`l8` without planning: €99,661 / €104,324). Keep a change only if margin rises on both sets and every week stays ≥ 91% on time. Then log it in `LESSONS.md`.
+Compare with `l8_plan2`: €112,459 on the tuning weeks, €119,506 on `l8x`, €138,040 on `l8y` (`l8_plan`: €109,576 / €116,587). Keep a change only if margin rises on both sets and every week stays ≥ 91% on time. Then log it in `LESSONS.md`.
 
 ## Status (Sat 14 Nov, 16:00)
 
@@ -159,9 +160,10 @@ Compare with `l8_plan`: €109,576 on the tuning weeks, €116,587 on `l8x` (`l8
 | `l8`, 30 test weeks | €10,687, worst week 91.5% on time | ~275 |
 | **`l8_plan`**, ranking round "Saturday 12:00" | **€14,282**, worst week 94.9% on time (€71,409 for 5 weeks) | **373** |
 | 10th / 1st place in that round | €17,886 / €19,842 | ~430–470 |
+| `l8_plan2`, ranking round "Saturday 15:00" | €13,138, worst week 93.8% (€65,689 for 5 weeks, rank 30 of 36; 10th €82,653) | 366 |
 | Test final Sat 14:00 (live clock) | €1,365 in 3 working days, 94.1% on time: rank 32 of 55 (1st €4,023) | 68 (1st: 158) |
 
-**The gap is still volume:** the top teams win ~450 orders a week at €40–43 each; we win 373 at €38. In the test final the competitor was cheap and we won 1% of quotes at ≥ 1.45× list, so we are testing cheaper prices (Exp. 39). Details and next steps: [PROGRESS.md](PROGRESS.md).
+**The gap is still volume:** the top teams win ~450 orders a week at €40–43 each; we win 373 at €38. In the test final the competitor was cheap and we won 1% of quotes at ≥ 1.45× list, so we are testing cheaper prices (Exp. 39). The biggest lever is driver cost: a car in a pair costs us 0.76× its typical fee, a car alone 1.06×, and half our cars still go alone (Exp. 40). Details and next steps: [PROGRESS.md](PROGRESS.md).
 
 ## Team and rules
 

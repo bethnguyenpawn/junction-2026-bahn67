@@ -3,7 +3,8 @@
     python main.py --level 1 --seed l1-a [--set open_mult=0.9 ...]
     python main.py --final
 
-    python main.py --board --level 8 --preset l8      # one RANKING run: counts on the practice leaderboard
+    python main.py --board --level 8 --preset l8_plan2   # one RANKING run: counts on the practice leaderboard
+    python main.py --world WORLD_ID --preset l8_plan2    # continue a world that stopped (e.g. a server restart)
 
 A ranking run plays the next secret week of the current round (5 per level per round, each once).
 It can't be revealed or forked, and deleting it doesn't remove it, so we never auto-delete one.
@@ -54,8 +55,9 @@ def load_near(world: World, params: Params) -> dict | None:
     return drivers_near(world.roster(), places_of(world.client))
 
 
-def play_practice(world: World, level: int, params: Params, verbose: bool = True) -> Score:
-    """Steps the world from one event that needs an answer to the next; one request per step."""
+def play_practice(world: World, level: int, params: Params, verbose: bool = True, rejoin: bool = False) -> Score:
+    """Steps the world from one event that needs an answer to the next; one request per step. With rejoin, first
+    rebuilds the desk from the world (after a server restart, or to continue a stopped run)."""
     snapshot = world.snapshot()
     desk = Desk(
         world,
@@ -67,6 +69,10 @@ def play_practice(world: World, level: int, params: Params, verbose: bool = True
     )
     ends_at = snapshot["endsAt"]
     seen = -1
+    if rejoin:
+        history = world.events()
+        desk.rejoin(snapshot, history)
+        seen = history[-1]["seq"] if history else -1
     while desk.now < ends_at:
         day, midnight = desk.now // DAY, (desk.now // DAY + 1) * DAY
         actions, desk.outbox = desk.outbox, []
@@ -122,6 +128,17 @@ def play_final(world: World, params: Params) -> None:
             return
 
 
+def play_practice_safely(world: World, level: int, params: Params, verbose: bool = True, rejoin: bool = False) -> Score:
+    """play_practice that survives server restarts and timeouts: waits, rebuilds from the world, goes on."""
+    while True:
+        try:
+            return play_practice(world, level, params, verbose, rejoin)
+        except Unreachable as error:
+            print(f"spread: {error}. Rebuilding from the world in 10 seconds.", file=sys.stderr, flush=True)
+            time.sleep(10)
+            rejoin = True
+
+
 def report(label: str, score: Score) -> None:
     orders = f"{score['wonOrders']:>4} orders  {score['onTimeShare']:6.1%} on time  {score['undeliveredShare']:5.1%} not delivered"
     print(
@@ -164,6 +181,7 @@ def main() -> None:
         action="store_true",
         help="play our next RANKING run at the level (counts on the practice leaderboard)",
     )
+    parser.add_argument("--world", help="continue this practice or ranking world (e.g. one stopped by an error)")
     parser.add_argument(
         "--preset",
         choices=sorted(config.PRESETS),
@@ -207,6 +225,13 @@ def main() -> None:
                     )
                     time.sleep(2)
             score = world.score()
+        elif args.world:
+            info = next((w for w in client.worlds() if w["worldId"] == args.world), None)
+            if info is None:
+                sys.exit(f"No world {args.world} for this key.")
+            world = client.world(args.world)
+            print(f"Continuing world {world.id}, level {info['level']}, preset {args.preset}.", flush=True)
+            score = play_practice_safely(world, info["level"], params, rejoin=True)
         else:
             if args.board and args.seed:
                 sys.exit("--board plays the round's secret week: it takes no --seed.")
@@ -217,11 +242,11 @@ def main() -> None:
                 flush=True,
             )
             try:
-                score = play_practice(world, args.level, params)
+                score = play_practice_safely(world, args.level, params)
             except BaseException:
                 if args.board:  # deleting a ranking run doesn't remove it: leave it, it plays on without us
                     print(
-                        f"{kind} {world.id} stopped; it counts with whatever it scores.",
+                        f"{kind} {world.id} stopped. Continue it with: --world {world.id} --preset {args.preset}",
                         file=sys.stderr,
                     )
                     raise

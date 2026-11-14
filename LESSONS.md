@@ -596,3 +596,42 @@ The 14:00 test final showed a cheap week: at ≥ 1.45× list we won 1% of quotes
 | **`quote_mult=1.40`** | **€112,634** (+2.8%) | **€117,077** (+0.4%) | 92.2% |
 
 - **Result:** 1.40 rises on both sets (+€3.5k over 20 weeks), more orders on both; learning the level is +€4.5k over 20 weeks but loses on `l8x`. Neither checked on `l8y` yet.
+
+## Experiment 40: why half the cars still go alone; longer pair links
+
+- **Measured** (`l8_plan`, 10 weeks, ~300 cars/week): 49% of cars travel in pairs at 0.76× their typical fee (€41.60/car); the rest go alone at 1.06× (€68.06/car). Alone because: held but no partner found 72 cars/week (extra cost vs a pair €1,181/week); in a pair no driver booked within 2 h, then split 33 (€774); private address 16 (€397); charging stop 13 (€181); other 20 (~€420).
+
+| `l8_plan` + | l8 | l8x | Worst |
+|---|---|---|---|
+| none | €109,576 | €116,587 | 93.2% |
+| `pair_km=50` | €112,169 (+2.4%) | €116,375 (−0.2%) | 93.0% |
+| `pair_km=80` | €111,094 | | 93.9% |
+
+- **Result:** links up to 50 km help on `l8`, flat on `l8x`: not adopted alone. Next: pair a newly won car with a posted, unbooked lone car; let an unbooked pair's fee rise instead of splitting it.
+
+## Experiment 41: price 1.40 + pair links 50 km together ✓ adopted (`--preset l8_plan2`)
+
+| `l8_plan` + | l8 | l8x | l8y | 20 weeks (l8 + l8x) | Worst |
+|---|---|---|---|---|---|
+| none | €109,576 | €116,587 | not run | €226,163 | 93.2% |
+| `quote_mult=1.40` | €112,634 | €117,077 | | +€3,548 | 92.2% |
+| `pair_km=50` | €112,169 | €116,375 | | +€2,381 | 93.0% |
+| **both (`l8_plan2`)** | €112,459 | **€119,506** | **€138,040** | **+€5,802 (+2.6%)** | **91.9%** (l8y-a), 30/30 ranked |
+
+- **Why together:** a cheaper price wins more cars, and longer links find more partners among them. Best on `l8x` and passes `l8y` (worst 91.9%).
+
+## Ranking round "Saturday 15:00" (`l8_plan2`, played as team "slow")
+
+| Run | Margin | Orders | On time | Cars in pairs | Fees ÷ revenue |
+|---|---|---|---|---|---|
+| 1 | €13,980 | 373 | 93.8% | 48% | 60% |
+| 2 | €14,757 | 394 | 97.0% | 51% | 60% |
+| 3 | €9,302 | 311 | 95.5% | 41% | 66% |
+| 4 | €11,198 | 356 | 94.1% | 43% | 62% |
+| 5 | €16,452 | 398 | 96.2% | 50% | 55% |
+| **Total** | **€65,689**, rank 30 of 36 at the time | 366/week | worst 93.8% | 47% | 60% |
+
+- **Gap:** 10th (razors) €82,653: 415 orders/week at €40 each; 1st (source-exp) €92,830: 425 at €44; us 366 at €36. We win 36% of quotes.
+- **Driver cost:** a paired car costs 0.76× its typical fee, a car alone 1.10×. The worst week had the fewest pairs.
+- **Other costs €1,131/week:** late refunds €613 (17 cars), failed visits €415 (12; 53% `not_ready`, 26% `no_plates`), release fees, undelivered, waiting €102.
+- **Server restart:** run 2 stopped on HTTP 502. `main.py --world ID` now rebuilds a stopped world with `Desk.rejoin` and plays on (run 2 finished ranked, €14,757); the practice loop and `evaluate.py` now wait and rebuild by themselves after a restart or timeout.

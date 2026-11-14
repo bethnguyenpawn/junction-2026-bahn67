@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from spread.client import Client, SpreadError
 
 import config
-from main import load_env, play_practice
+from main import load_env, play_practice_safely
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 MAX_PARALLEL = 4  # half of the team limit (8): the other 4 slots are for teammates
@@ -45,7 +45,7 @@ def run_seed(level: int, seed: str, params: config.Params) -> dict:
     client = Client()  # one connection per thread
     world = client.create(level=level, seed=seed)
     try:
-        score = play_practice(world, level, params, verbose=False)
+        score = play_practice_safely(world, level, params, verbose=False)
     except BaseException:
         try:
             world.delete()

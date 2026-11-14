@@ -2,34 +2,36 @@
 
 Status, what we learned, and what's next. Every experiment with its numbers: [LESSONS.md](LESSONS.md) · Challenge in plain words: [docs/CHALLENGE_SUMMARY.md](docs/CHALLENGE_SUMMARY.md)
 
-## Status (Sat 14 Nov, 16:00)
+## Status (Sat 14 Nov, 16:30, after round 15:00)
 
-**Use `--preset l8_plan`** for ranking runs, the test finals and the final.
+**Use `--preset l8_plan2`** (`l8_plan` + price 1.40× and pair links up to 50 km, Exp. 41) for ranking runs, the test finals and the final.
 
 | Level 8 | Test weeks | Per week | Worst week |
 |---|---|---|---|
 | Official starter | 10 weeks: −€604,425 | −€60,442 | 39.3% (never ranked) |
 | `l8_v1` → `l8_v3` (older versions) | 30 weeks: €260,043 → €307,943 | €8,668 → €10,265 | 91.0–92.6% |
 | `l8` (pricing rules, no planning) | 30 weeks: €320,596 | €10,687 | 91.5% |
-| **`l8_plan`** (`l8` + two-car gigs, pair fix) | 20 weeks: `l8` €109,576, `l8x` €116,587 (`l8`: €99,661 / €104,324) | **€11,308** | **93.2%** |
+| `l8_plan` (`l8` + two-car gigs, pair fix) | 20 weeks: `l8` €109,576, `l8x` €116,587 (`l8`: €99,661 / €104,324) | €11,308 | 93.2% |
+| **`l8_plan2`** (+ price 1.40, links ≤ 50 km) | 30 weeks: `l8` €112,459, `l8x` €119,506, `l8y` €138,040 | **€12,334** | **91.9%**, 30/30 ranked |
 
 | Practice ranking round | Preset | Us | Rank | 10th / 1st |
 |---|---|---|---|---|
 | "Saturday 00:00" | `l8_v1` | €46,496 | 43 of 62 | €75,475 / – |
 | "Saturday 09:00" | `l8_v3` | €47,002 | 28 of 36 | €68,719 / €77,573 |
 | **"Saturday 12:00"** | **`l8_plan`** | **€71,409**, 373 orders/week, worst 94.9% | 32 of 51 | €89,431 / €99,211 |
+| "Saturday 15:00" (as team "slow") | `l8_plan2` | €65,689, 366 orders/week, worst 93.8% | 30 of 36 | €82,653 / €92,830 |
 | Test final Sat 14:00 (live, Thu–Wed) | `l8_plan` | €1,365, 68 orders, 94.1% | 32 of 55 | €3,292 / €4,023 |
 
 **Gap:** the top 10 win ~430–470 orders/week at €40–43 each; we win 373 at €38. We need ≈ +€3,300/week. Our worst on-time week is 94.9% (90% needed), so we can afford to win more.
 
-Ranking round: one person runs `for i in 1 2 3 4 5; do .venv/bin/python main.py --board --level 8 --preset l8_plan || break; done` (only one ranking run per team at a time; a second one gets HTTP 409).
+Ranking round: one person runs `for i in 1 2 3 4 5; do .venv/bin/python main.py --board --level 8 --preset l8_plan2 || break; done` (only one ranking run per team at a time; a second one gets HTTP 409).
 
-## The level-8 system (`--preset l8_plan`)
+## The level-8 system (`--preset l8_plan2`)
 
-1. **Price:** 1.45× the list price (the competitor is 26–54% above list); 0.2× less where ≥ 40 drivers live within 30 km of the pickup; 0.2× more for private addresses; plus the competitor's offset for the delivery place (−0.17× Vantaa … +0.18× Joensuu, `lanes.json`).
+1. **Price:** 1.40× the list price (the competitor is 26–54% above list); 0.2× less where ≥ 40 drivers live within 30 km of the pickup; 0.2× more for private addresses; plus the competitor's offset for the delivery place (−0.17× Vantaa … +0.18× Joensuu, `lanes.json`).
 2. **Backlog brake:** +0.03× per won order still without a driver, so we take fewer cars when overloaded.
 3. **Decline** (quote 10× list: never wins, costs nothing): trips over 550 km, and requests whose delivery options leave < 8 h to find a driver.
-4. **Batch planning:** won cars with ≥ 8 h until their latest pickup are held. Every 3 h (07:00–19:00) the held cars are paired so one driver delivers two (car B's pickup ≤ 30 km from car A's delivery, both ≥ 4 h early), at 0.9× both typical fees. A car that can't wait 24 h for the next plan is posted alone; a pair nobody books within 2 h is split into two gigs.
+4. **Batch planning:** won cars with ≥ 8 h until their latest pickup are held. Every 3 h (07:00–19:00) the held cars are paired so one driver delivers two (car B's pickup ≤ 50 km from car A's delivery, both ≥ 4 h early), at 0.9× both typical fees. A car that can't wait 24 h for the next plan is posted alone; a pair nobody books within 2 h is split into two gigs.
 5. **Driver fee:** opens at 0.8× the typical fee, +0.1× every 30 min up to 1.3×; after `deadline_close` 1.5× rising to 2.5×.
 6. **Recovery:** after a crash or server restart, the bot rebuilds its state from the world (tested: same result as without the restart); held cars are posted at once.
 
@@ -59,12 +61,22 @@ Ranking round: one person runs `for i in 1 2 3 4 5; do .venv/bin/python main.py 
 
 ## Next (in priority order)
 
-1. **Cheaper prices** (Exp. 39): `quote_mult=1.40` gains on both `l8` and `l8x` (+€3.5k / 20 weeks, worst 92.2%). Check it on `l8y`; if every week ≥ 91%, make it the preset for the 20:00 test final.
-2. **Cheap weeks:** learning the week's price level (`market_lr=0.01 market_hi=0`) gains +€5.9k on `l8` but −€1.3k on `l8x`. Try a milder form (smaller step or floor −0.1), alone and with 1.40.
-3. **Cheaper and more pairs:** `pair_fee` 0.8–0.85, `plan_every_h=2`, `pair_km=50` (driver fees are ~60% of revenue).
-4. **Test final Sat 20:00** with the best validated preset; **final Sun 08:00**. Freeze the code Saturday night.
+**Biggest lever: driver cost per car** (Exp. 40). A car in a pair costs 0.76× its typical fee (€41.60), a car alone 1.06× (€68.06), and half our cars still go alone. Pairing 75% instead of 49% ≈ +€2,000/week; a cheaper price (1.40) is only ≈ +€180/week.
 
-The 14:00 test final found one bug (a changed car stranded its partner in a two-car gig), fixed in `Desk.withdraw` with a test; uncommitted.
+1. **More pairs, in code:** (a) pair a newly won car with a lone car that is posted but not booked yet (72 cars/week are held and find no partner, €1,181/week extra); (b) let an unbooked pair's fee rise instead of splitting it after 2 h (33 cars/week, €774/week extra); (c) chains of 3 cars.
+2. **Parameters on top of `l8_plan2`:** `pair_fee` 0.8, learning the week's price level (mixed, Exp. 39).
+3. **Fewer failed visits:** 12/week cost €415, 53% `not_ready` (driver came before the car was ready). Check the note's ready time against the driver's arrival.
+4. **Test final Sat 20:00** and **final Sun 08:00** with the best preset that passed `l8`, `l8x` and `l8y`. Freeze the code Saturday night.
+
+**Estimated margin:** `l8_plan` ≈ €11,300/week on our test weeks and €14,282/week in the 12:00 ranking round (10th place: €17,886). With 75% of cars paired ≈ €16,300/week.
+
+**Ranking runs:** one person, five in a row: `for i in 1 2 3 4 5; do .venv/bin/python main.py --board --level 8 --preset l8_plan2 || break; done`.
+
+**After a crash or server restart:** a practice or ranking run that stopped continues with `.venv/bin/python main.py --world WORLD_ID --preset l8_plan2` (the command is printed when it stops). The bot now also waits and rebuilds by itself.
+
+**Keys:** the final and the submission are played with the `bahn67` key in `.env`.
+
+**Branches:** we play `otso/level1-baseline`. `main` has Anh's older Friday version (kit starter + hand-made pricing, not benchmarked); don't merge it into our branch before the final. After the final, merge our branch into `main` for the submission.
 
 ## Deadlines
 
