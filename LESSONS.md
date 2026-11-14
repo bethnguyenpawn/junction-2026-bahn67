@@ -572,3 +572,27 @@ Played `l8-a` to Wednesday 12:00, threw the desk away, rebuilt it with `Desk.rej
 | Both fresh holdouts, 20 weeks | €190,701 | €187,037 | **−€3,664** | 19/20 / 19/20 | 88.84% / 89.25% |
 
 - **Decision:** keep lane-aware `l8` as the production preset; do not promote `l8_guarded`. The tune-set gain did not repeat on fresh holdouts, and the candidate lost margin there while neither strategy met the 90% requirement in one `l8u` week. `l8_guarded` remains available for further experiments only. The risk slices above are diagnostic signals from two paired outcomes, not a calibrated causal estimate.
+
+## Test final Sat 14:00 (live clock, Thursday to Wednesday, `l8_plan`)
+
+| | Orders | Margin | On time | Rank |
+|---|---|---|---|---|
+| bahn67 | 68 | €1,365 | 94.1% (82.4% after Thursday) | 32 of 55 ranked |
+| 1st (akanegakirru) / 10th | 158 / 153 | €4,023 / €3,292 | 98.7% | |
+
+- **Speed is fine:** the reveal shows every request got our quote in time (0 `unquoted`).
+- **Cheap week:** the world played Monday to Wednesday without us, so every dealer's trust started at 0, and the competitor was cheap. Win rate by our price: 1.0–1.3× 48%, 1.3–1.45× 18%, 1.45–1.6× 1%, above 0%. Teams that price lower won 2.3× our orders. A fixed 1.45× has no answer to a cheap week.
+- **Bug, fixed:** a dealer changed one car of a two-car gig (`order_changed`). `Desk.withdraw` withdrew the shared gig but reposted only the changed car; the other car (R00656) never got a driver and was not delivered. Now the other car is posted again alone (`PairChange` test).
+- **Bad luck, not bugs:** R00655 found no driver in 6 h at steep fees; R00679 needed plates the request didn't mention (`no_plates`, retried with plates, late).
+
+## Experiment 39: cheaper prices with planning (after the 14:00 test final)
+
+The 14:00 test final showed a cheap week: at ≥ 1.45× list we won 1% of quotes. Planning leaves on-time room (worst ranking week 94.9%), so cheaper prices were retested on `l8_plan` (with the pair fix).
+
+| `l8_plan` + | l8 | l8x | Worst |
+|---|---|---|---|
+| none (baseline with fix) | €109,576 | €116,587 | 93.2% |
+| learn the week's level, lower only (`market_lr=0.01 market_hi=0`) | €115,459 (+5.4%) | €115,249 (−1.1%) | 92.2% |
+| **`quote_mult=1.40`** | **€112,634** (+2.8%) | **€117,077** (+0.4%) | 92.2% |
+
+- **Result:** 1.40 rises on both sets (+€3.5k over 20 weeks), more orders on both; learning the level is +€4.5k over 20 weeks but loses on `l8x`. Neither checked on `l8y` yet.

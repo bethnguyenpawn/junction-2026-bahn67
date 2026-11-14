@@ -142,6 +142,34 @@ class Plan(unittest.TestCase):
         self.assertEqual(next_plan_at(19 * HOUR, 3), DAY + 7 * HOUR)  # after 19:00 -> next day 07:00
 
 
+class PairChange(unittest.TestCase):
+    """Test final (Sat 14:00): a dealer changed one car of a two-car gig; we withdrew the gig and reposted only that
+    car, so the other car never got a driver."""
+
+    def order(self, oid):
+        window = {"from": 0, "to": DAY}
+        place = {"placeId": "a", "privateAddress": False, "window": window}
+        car = {"premium": False, "electric": False, "chargePercent": None}
+        return {
+            "id": oid,
+            "legs": [{"car": car, "pickup": place, "delivery": {**place, "placeId": "b"}}],
+            "deadline": DAY,
+            "deliveredAt": [None],
+        }
+
+    def test_changed_car_reposts_its_partner(self):
+        desk = Desk(None, 8, 10 * HOUR, PRESETS["l8_plan"])
+        for oid in ("A", "B"):
+            desk.orders[oid] = self.order(oid)
+            desk.requests[oid] = {"referenceFeeCents": 5000, "note": None, "legs": [{}]}
+        stops = [{"orderId": oid, "leg": 0, "kind": kind} for oid in ("A", "B") for kind in ("pickup", "delivery")]
+        desk.carry({"type": "post", "stops": stops, "audience": {}, "schedule": []}, "g1")
+        desk.change(self.order("A"))
+        posted = sorted(a["stops"][0]["orderId"] for a in desk.outbox if a["type"] == "post")
+        self.assertIn({"type": "withdraw", "gigId": "g1"}, desk.outbox)
+        self.assertEqual(posted, ["A", "B"])
+
+
 class Config(unittest.TestCase):
     def test_overrides_use_field_types_not_preset_values(self):
         p = from_overrides(["decline_km=450.5", "raise_steps=4"], PRESETS["l8"])

@@ -684,13 +684,19 @@ class Desk:
                 self.split(gig_id)
 
     def withdraw(self, order_id: str) -> bool:
-        """Withdraws an order's gigs. False, and nothing withdrawn, when a driver holds one."""
+        """Withdraws an order's gigs. False, and nothing withdrawn, when a driver holds one. The other car of a
+        withdrawn two-car gig is posted again alone (test final: without this it was never posted again)."""
         self.send_post_of(order_id)
         gigs = self.gigs_of(order_id)
         if any(gig_id in self.booked for gig_id in gigs):
             return False
-        self.leg_gigs.pop(order_id, None)
+        partners = {stop["orderId"] for gig_id in gigs for stop in self.posts[gig_id]["stops"]} - {order_id}
+        for oid in (order_id, *partners):
+            self.leg_gigs.pop(oid, None)
         self.outbox += [{"type": "withdraw", "gigId": gig_id} for gig_id in gigs]
+        for oid in partners:
+            if oid in self.orders:
+                self.post(self.orders[oid], undelivered(self.orders[oid]))
         return True
 
     def send_post_of(self, order_id: str) -> None:

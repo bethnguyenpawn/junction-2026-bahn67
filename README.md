@@ -34,7 +34,7 @@ Open `.env` and replace `put-your-team-key-here` with the `bahn67` key; ask a te
 **3. Check it works**
 
 ```bash
-python -m unittest discover -s tests                 # 25 tests OK (no key needed)
+python -m unittest discover -s tests                 # 26 tests OK (no key needed)
 python main.py --level 8 --seed l8-a --preset l8     # plays one practice week, ~1 min
 ```
 
@@ -149,18 +149,19 @@ python evaluate.py --level 8 --preset l8_plan --set quote_mult=1.4 --note "plan 
 python evaluate.py --level 8 --preset l8_plan --seed-prefix l8x --set quote_mult=1.4 --note "x: plan q1.4"   # 10 holdout weeks
 ```
 
-Compare with `l8_plan`: €116,121 on `l8x` (run it once on `l8` and `l8y` to get those baselines; `l8` without planning: €99,661 / €104,324 / €116,611). Keep a change only if margin rises on both sets and every week stays ≥ 91% on time. Then log it in `LESSONS.md`.
+Compare with `l8_plan`: €109,576 on the tuning weeks, €116,587 on `l8x` (`l8` without planning: €99,661 / €104,324). Keep a change only if margin rises on both sets and every week stays ≥ 91% on time. Then log it in `LESSONS.md`.
 
-## Status (Sat 14 Nov, 13:30)
+## Status (Sat 14 Nov, 16:00)
 
 | Level 8 | Margin per week | Orders per week |
 |---|---|---|
 | Official starter | −€60,442 (never ranked) | |
 | `l8`, 30 test weeks | €10,687, worst week 91.5% on time | ~275 |
 | **`l8_plan`**, ranking round "Saturday 12:00" | **€14,282**, worst week 94.9% on time (€71,409 for 5 weeks) | **373** |
-| 10th / 1st place in that round | €17,583 / €19,798 | ~430–470 |
+| 10th / 1st place in that round | €17,886 / €19,842 | ~430–470 |
+| Test final Sat 14:00 (live clock) | €1,365 in 3 working days, 94.1% on time: rank 32 of 55 (1st €4,023) | 68 (1st: 158) |
 
-**The gap is still volume:** the top teams win ~450 orders a week at €40–43 each; we win 373 at €38. We stay well above 90% on time, so we can afford to take more. Details and next steps: [PROGRESS.md](PROGRESS.md).
+**The gap is still volume:** the top teams win ~450 orders a week at €40–43 each; we win 373 at €38. In the test final the competitor was cheap and we won 1% of quotes at ≥ 1.45× list, so we are testing cheaper prices (Exp. 39). Details and next steps: [PROGRESS.md](PROGRESS.md).
 
 ## Team and rules
 

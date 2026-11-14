@@ -2,7 +2,7 @@
 
 Status, what we learned, and what's next. Every experiment with its numbers: [LESSONS.md](LESSONS.md) · Challenge in plain words: [docs/CHALLENGE_SUMMARY.md](docs/CHALLENGE_SUMMARY.md)
 
-## Status (Sat 14 Nov, 13:30)
+## Status (Sat 14 Nov, 16:00)
 
 **Use `--preset l8_plan`** for ranking runs, the test finals and the final.
 
@@ -11,13 +11,14 @@ Status, what we learned, and what's next. Every experiment with its numbers: [LE
 | Official starter | 10 weeks: −€604,425 | −€60,442 | 39.3% (never ranked) |
 | `l8_v1` → `l8_v3` (older versions) | 30 weeks: €260,043 → €307,943 | €8,668 → €10,265 | 91.0–92.6% |
 | `l8` (pricing rules, no planning) | 30 weeks: €320,596 | €10,687 | 91.5% |
-| **`l8_plan`** (`l8` + two-car gigs) | 10 weeks `l8x`: €116,121 (`l8`: €104,324) | **€11,612** | **93.2%** |
+| **`l8_plan`** (`l8` + two-car gigs, pair fix) | 20 weeks: `l8` €109,576, `l8x` €116,587 (`l8`: €99,661 / €104,324) | **€11,308** | **93.2%** |
 
 | Practice ranking round | Preset | Us | Rank | 10th / 1st |
 |---|---|---|---|---|
 | "Saturday 00:00" | `l8_v1` | €46,496 | 43 of 62 | €75,475 / – |
 | "Saturday 09:00" | `l8_v3` | €47,002 | 28 of 36 | €68,719 / €77,573 |
-| **"Saturday 12:00"** | **`l8_plan`** | **€71,409**, 373 orders/week, worst 94.9% | – | €87,915 / €98,990 |
+| **"Saturday 12:00"** | **`l8_plan`** | **€71,409**, 373 orders/week, worst 94.9% | 32 of 51 | €89,431 / €99,211 |
+| Test final Sat 14:00 (live, Thu–Wed) | `l8_plan` | €1,365, 68 orders, 94.1% | 32 of 55 | €3,292 / €4,023 |
 
 **Gap:** the top 10 win ~430–470 orders/week at €40–43 each; we win 373 at €38. We need ≈ +€3,300/week. Our worst on-time week is 94.9% (90% needed), so we can afford to win more.
 
@@ -58,10 +59,12 @@ Ranking round: one person runs `for i in 1 2 3 4 5; do .venv/bin/python main.py 
 
 ## Next (in priority order)
 
-1. **Test finals Sat 14:00 and 20:00:** start `.venv/bin/python main.py --final --preset l8_plan` before each begins. Check it keeps up with the clock and the score looks like a practice week.
-2. **Win more orders now that planning frees drivers** (one change at a time, on `l8`, `l8x`, then `l8y`): `quote_mult=1.40`, `decline_km=600`, a lower `pair_fee` (0.8).
-3. **Cars still undelivered at the week's end:** 0.6–0.8% in 2 of 5 ranking weeks, −€355 and −€836. Find out why and fix.
-4. **Final Sun 08:00** with the best validated preset; start it before 08:00 and watch the log.
+1. **Cheaper prices** (Exp. 39): `quote_mult=1.40` gains on both `l8` and `l8x` (+€3.5k / 20 weeks, worst 92.2%). Check it on `l8y`; if every week ≥ 91%, make it the preset for the 20:00 test final.
+2. **Cheap weeks:** learning the week's price level (`market_lr=0.01 market_hi=0`) gains +€5.9k on `l8` but −€1.3k on `l8x`. Try a milder form (smaller step or floor −0.1), alone and with 1.40.
+3. **Cheaper and more pairs:** `pair_fee` 0.8–0.85, `plan_every_h=2`, `pair_km=50` (driver fees are ~60% of revenue).
+4. **Test final Sat 20:00** with the best validated preset; **final Sun 08:00**. Freeze the code Saturday night.
+
+The 14:00 test final found one bug (a changed car stranded its partner in a two-car gig), fixed in `Desk.withdraw` with a test; uncommitted.
 
 ## Deadlines
 
