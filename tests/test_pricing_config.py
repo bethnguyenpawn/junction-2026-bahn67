@@ -146,6 +146,21 @@ class Fees(unittest.TestCase):
         self.assertEqual(fees, sorted(fees))
         self.assertTrue(all(isinstance(f, int) for f in fees))
 
+    def test_early_cut_opens_lower_with_the_same_cap(self):
+        normal = fee_schedule(0, 5000, 8, PRESETS["l8"])
+        early = fee_schedule(0, 5000, 8, PRESETS["l8"], cut=0.2)
+        self.assertEqual(early[0]["feeCents"], 3000)  # 0.6x
+        self.assertEqual(early[-1]["feeCents"], normal[-1]["feeCents"])
+        self.assertEqual(len(early), len(normal) + 2)
+
+    def test_early_cut_only_for_cars_ready_later(self):
+        desk = Desk(None, 8, 0, Params(early_cut=0.1, early_h=12))
+        for oid, ready in (("now", 0), ("tomorrow", 13 * 60)):
+            window = {"from": ready, "to": DAY}
+            desk.orders[oid] = {"id": oid, "legs": [{"pickup": {"window": window}}]}
+        self.assertEqual(desk.early_cut({"orderId": "now", "leg": 0, "kind": "pickup"}), 0.0)
+        self.assertEqual(desk.early_cut({"orderId": "tomorrow", "leg": 0, "kind": "pickup"}), 0.1)
+
 
 class Plan(unittest.TestCase):
     def test_plans_from_07_to_19_every_n_hours(self):
@@ -484,6 +499,7 @@ class Config(unittest.TestCase):
                 "l8_notes",
                 "l8_charge",
                 "l8_lane",
+                "l8_early",
                 "l8_plan_match",
                 "l8_guarded",
                 "l8_v3",

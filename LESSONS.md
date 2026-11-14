@@ -1,7 +1,7 @@
 # Lessons: experiment log
 
 **Summary.** Level 1: a fee ladder by reprice (open 0.7×, +0.3×/h) turns −€28,978 into +€34,186 per 10 weeks.
-Level 8 (the final): pricing and fee rules (Exp. 3–21, 30) turn the starter's −€60,442/week into ~€10,700/week (`l8`); batch planning of two-car gigs (Exp. 37, `l8_plan`) adds ~45% more orders: €71,409 in the 5-week ranking round "Saturday 12:00", every week ≥ 94.9% on time.
+Level 8 (the final): pricing and fee rules (Exp. 3–21, 30) turn the starter's −€60,442/week into ~€10,700/week (`l8`); batch planning of two-car gigs (Exp. 37, `l8_plan`) adds ~45% more orders: €71,409 in the 5-week ranking round "Saturday 12:00", every week ≥ 94.9% on time. Then chains of 3 (Exp. 42), the note reader (Exp. 49), rule fixes (charging, cancellations, lane fees; Exp. 55, 60, 61) and a lower opening fee for cars ready ≥ 12 h later (Exp. 64): €14,508/week on 30 test weeks (`l8_early`).
 What did not work: most price ideas after Exp. 30 (trust, weekdays, outage/price-war days, learning the market, expected-profit pricing); direct offers to drivers; posting two-car gigs as soon as cars are won (Exp. 24, pairs too rare).
 
 Every experiment: level 1, seeds `l1-a` … `l1-j` (10 weeks), one change at a time. Raw numbers in `results/log.jsonl`.
@@ -849,3 +849,23 @@ Split chain (no booking within 2 h) 79, held without a partner until 24 h before
 
 - **Rule:** the app notifies drivers near a gig's first pickup, and of each order only once. Chains led by a car we posted before were booked 57.6% (fresh head 83.6%; all cars posted before 36.1%).
 - **Result:** l8 €127,024 (−€1.7k). The low booking is mostly selection (cars nobody wanted alone); chaining them anyway is still better. Off.
+
+## Experiment 63: price by our cost with the de-noised fee (`l8_lane` + `cost_k=0.5`) ✗
+
+- **Idea:** Exp. 26 priced by the request's typical fee, which carries ~11% noise; with `fee_lane` the cost estimate is cleaner.
+- **Result:** l8 €129,649 (−€2.4k). Off.
+
+## Experiment 64: lower opening fee for cars ready 12 h or more later (`early_cut`, `early_h`, preset `l8_early`) ✓
+
+- **Trace** (`l8_lane`, l8-a, l8-b, l8x-a, l8x-b; per week, first posts): gigs whose first car is ready ≥ 12 h after posting book 99% (1 car, 25 min, 51% at the opening fee), 97% (2 cars, 2 min, 76%), 94% (3 cars, 1 min, 93%): €8.5k of fees a week. Cars already ready: 1 car 85% (33 min), 2 cars 77%, 3 cars 74%; their chains that do not book within minutes rarely book later. RULES: a driver books a gig for a later day only when they know they work that day; those who do take it at once.
+- **Also measured:** 27% of fees (€6.0k/week) go to reposted gigs, mostly cars split out of unbooked chains (92 cars/week, 50% booked as singles). Chaining cars that are ready now still pays: 55% × €42 + 45% × €63 ≈ €51 vs €67 alone. Trust: if no late order ever halved a dealer's count, we would win ~9 more orders/week (≈ €370); 60% of our quotes go to dealers at trust 0–4. Bulk orders (one 30–36-car batch a week): we win 5–29 of them at €30–60 margin each. We never post at night.
+- **Rule:** `Desk.early_cut`: when the first car of a gig is ready (stated window, or the note's later ready time) ≥ `early_h` = 12 h from now, the schedule opens `early_cut` × fee lower and gets the extra raise steps to keep the same cap (`fee_schedule(cut=)`).
+
+| `l8_lane` + | l8 | l8x | l8y | worst |
+|---|---|---|---|---|
+| — | €132,001 | €140,942 | €155,720 | 93.7% |
+| `early_cut=0.05` | €132,584 (+€0.6k) | | | 95.1% |
+| **`early_cut=0.1`** | **€134,315 (+€2.3k)** | **€144,272 (+€3.3k)** | **€156,651 (+€0.9k)** | **92.9%** |
+| `early_cut=0.2` | €126,706 (−€5.3k) | €132,392 (−€8.6k) | | 94.2% |
+
+- **Result:** 0.1 is up on all three sets: **€435,238 over 30 weeks (+€6.6k, +1.5%), worst 92.9%**, 30/30 ranked → preset `l8_early`. 0.2 falls off a cliff: drivers learn how far our fees rise from the first fee they saw, so a low opening makes them wait on every gig.

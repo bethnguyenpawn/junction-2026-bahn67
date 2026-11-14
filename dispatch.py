@@ -103,16 +103,17 @@ def wake_on(params: Params) -> list[str]:
 # --- fee schedules: the main decision at levels 1-2 -------------------------------------------
 
 
-def fee_schedule(now: int, fee: float, level: int, p: Params, every: int = 0) -> list[FeeStep]:
+def fee_schedule(now: int, fee: float, level: int, p: Params, every: int = 0, cut: float = 0.0) -> list[FeeStep]:
     """Normal schedule: open_mult x fee, then +raise_per_step x fee every raise_every_min (or `every`). Level 1: one
     step. With night_hold the minutes count only while drivers read (07-23), so a gig posted at night opens the day
-    at its first fee instead of a fee raised for nobody."""
-    steps = 1 if level == 1 else p.raise_steps
+    at its first fee instead of a fee raised for nobody. `cut` opens that much lower and adds the steps to reach the
+    same cap."""
+    steps = 1 if level == 1 else p.raise_steps + math.ceil(cut / p.raise_per_step - 1e-9)
     every = every or p.raise_every_min
     return [
         {
             "at": reading_minutes_after(now, k * every) if p.night_hold and k else now + k * every,
-            "feeCents": max(1, int(fee * (p.open_mult + k * p.raise_per_step) + 0.5)),
+            "feeCents": max(1, int(fee * (p.open_mult - cut + k * p.raise_per_step) + 0.5)),
         }
         for k in range(steps)
     ]
@@ -964,7 +965,19 @@ class Desk:
                     "feeCents": max(1, int(fee * self.ladder_mult(order_ids[0]) + 0.5)),
                 }
             ]
-        return fee_schedule(self.now, fee, self.level, self.p, self.raise_every(order_ids))
+        return fee_schedule(self.now, fee, self.level, self.p, self.raise_every(order_ids), self.early_cut(stops[0]))
+
+    def early_cut(self, first: StopRef) -> float:
+        """How much lower a gig opens when its first car is ready early_h or more from now (Params.early_cut): drivers
+        book a gig for a later day only when they know they work then, and those who do take it at once (Exp. 64)."""
+        order = self.orders.get(first["orderId"])
+        if not self.p.early_cut or order is None:
+            return 0.0
+        ready = order["legs"][first["leg"]]["pickup"]["window"]["from"]
+        facts = self.facts(order["id"])
+        if facts is not None and facts.ready is not None:
+            ready = max(ready, facts.ready)
+        return self.p.early_cut if ready - self.now >= self.p.early_h * HOUR else 0.0
 
     def raise_every(self, order_ids: list[str]) -> int:
         """Minutes between raises: slow_every_min when every car still has slow_after_h hours until its last pickup

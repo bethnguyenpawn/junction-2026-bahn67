@@ -43,17 +43,17 @@ The week should end with about `margin € 13,272   305 orders   95.4% on time  
 ## Commands
 
 ```bash
-python main.py --level 8 --seed l8-a --preset l8_lane                    # one practice week
-python evaluate.py --level 8 --preset l8_lane                            # benchmark: 10 fixed weeks, ~4 min
-python evaluate.py --level 8 --preset l8_lane --seed-prefix l8x         # the same on 10 other weeks
-python evaluate.py --level 8 --preset l8_lane --set pair_fee=0.8 --note "idea"   # try one change
+python main.py --level 8 --seed l8-a --preset l8_early                    # one practice week
+python evaluate.py --level 8 --preset l8_early                            # benchmark: 10 fixed weeks, ~4 min
+python evaluate.py --level 8 --preset l8_early --seed-prefix l8x         # the same on 10 other weeks
+python evaluate.py --level 8 --preset l8_early --set pair_fee=0.8 --note "idea"   # try one change
 python analysis/orders.py --note "idea"                                  # which orders were late / lost money
-python main.py --board --level 8 --preset l8_lane                       # ranking run: only one at a time per team
-python main.py --final --preset l8_lane                                  # the final (live clock)
-python main.py --world WORLD_ID --preset l8_lane                         # continue a world that stopped (e.g. server restart)
+python main.py --board --level 8 --preset l8_early                       # ranking run: only one at a time per team
+python main.py --final --preset l8_early                                  # the final (live clock)
+python main.py --world WORLD_ID --preset l8_early                         # continue a world that stopped (e.g. server restart)
 ```
 
-- **Presets** (`config.py`): **`l8_lane` is the current best**, used for ranking runs and the final: `l8_charge` with fees built on each lane's mean typical fee (`fees.json`, Exp. 61). `l8_charge` = `l8_notes` with charging stops only on routes over 200 km (Exp. 55). `l8_notes` = `l8_chain` plus the note reader `notes.py` (Exp. 49), the fallback. `l8_chain` = `l8_plan2` (batch planning, price 1.40×, links up to 50 km) with chains of up to 3 cars per driver, planned every hour (Exp. 42). `l8` is without batch planning, `l8_plan_match` pairs with maximum matching (+3.2% over `l8_plan`, Exp. 43), `l8_guarded` is an experiment that was not adopted (Exp. 38), `starter` = the official starter, and the `l8_v*` presets are older versions. `--set name=value` changes any parameter.
+- **Presets** (`config.py`): **`l8_early` is the current best**, used for ranking runs and the final: `l8_lane` with gigs whose first car is ready ≥ 12 h later opening at 0.7× instead of 0.8× (Exp. 64). `l8_lane` (the fallback) = `l8_charge` with fees built on each lane's mean typical fee (`fees.json`, Exp. 61). `l8_charge` = `l8_notes` with charging stops only on routes over 200 km (Exp. 55). `l8_notes` = `l8_chain` plus the note reader `notes.py` (Exp. 49). `l8_chain` = `l8_plan2` (batch planning, price 1.40×, links up to 50 km) with chains of up to 3 cars per driver, planned every hour (Exp. 42). `l8` is without batch planning, `l8_plan_match` pairs with maximum matching (+3.2% over `l8_plan`, Exp. 43), `l8_guarded` is an experiment that was not adopted (Exp. 38), `starter` = the official starter, and the `l8_v*` presets are older versions. `--set name=value` changes any parameter.
 - **Test weeks:** tune on the `l8-a..j` weeks, confirm on `l8x`, and use `l8y` only as a final check. Each `evaluate.py` run is logged in `results/log.jsonl`; it waits up to five minutes when all team practice slots are taken.
 - **Ranking runs** (`--board`) only when the team agrees: 5 per round, and they can't be undone.
 
@@ -105,7 +105,7 @@ We use the official `spread` Python kit. It sends HTTPS + JSON to `https://sprea
 
 Winning means picking good numbers. All of them live in `Params` in `config.py`, and a preset is one set of them. Try a change without editing code: `--set name=value`.
 
-### Parameters used by `--preset l8_lane`
+### Parameters used by `--preset l8_early`
 
 | Parameter | Value | What it does | Why this value |
 |---|---|---|---|
@@ -118,6 +118,7 @@ Winning means picking good numbers. All of them live in `Params` in `config.py`,
 | `min_slack_h` | 8 | Only quote delivery options that leave ≥ 8 h to find a driver | Tight options are late |
 | `open_mult` | 0.8 | A gig's fee opens at 0.8× the typical fee | Fees are ~60% of revenue |
 | `raise_per_step`, `raise_every_min`, `raise_steps` | 0.1, 30, 6 | +0.1× every 30 min, up to 1.3× | Best tested as one schedule for all cars |
+| `early_cut`, `early_h` | 0.1, 12 | A gig whose first car is ready ≥ 12 h from now opens 0.1× lower, same cap | Drivers who know they work tomorrow book such gigs at once (94–99%, 51–93% at the opening fee): +1.5% over 30 weeks; 0.2× lower loses (Exp. 64) |
 | `steep_*` | defaults | After the deadline warning: 1.5×, +0.25× every 30 min, up to 2.5× | Last chance to find a driver |
 | `plan_every_h` | 1 | Batch planning: hold won cars with ≥ 8 h (`hold_h`) to their latest pickup; every hour (07:00–19:00) chain them, with our posted one-car gigs nobody has booked yet | One driver delivers several cars: ~45% more orders (Exp. 37), hourly +2.5% (Exp. 42) |
 | `chain_max` | 3 | Up to 3 cars per driver (`build_chains`: round trips first, then the shortest link; `chain_fits` checks deadlines, slots and 12 h) | +6.7% over 30 weeks vs pairs only (Exp. 42); 4 cars: −€2.6k (Exp. 45) |
@@ -152,13 +153,13 @@ Also tested: reacting to the competitor's outage day (`outage_add`, Exp. 34) and
 ### How to test a change
 
 ```bash
-python evaluate.py --level 8 --preset l8_lane --set pair_fee=0.8 --note "pf0.8"                    # 10 tuning weeks
-python evaluate.py --level 8 --preset l8_lane --seed-prefix l8x --set pair_fee=0.8 --note "x: pf0.8"   # 10 holdout weeks
+python evaluate.py --level 8 --preset l8_early --set pair_fee=0.8 --note "pf0.8"                    # 10 tuning weeks
+python evaluate.py --level 8 --preset l8_early --seed-prefix l8x --set pair_fee=0.8 --note "x: pf0.8"   # 10 holdout weeks
 ```
 
-Compare with `l8_lane`: €132,001 on the tuning weeks, €140,942 on `l8x`, €155,720 on `l8y` (`l8_charge`: €128,702 / €139,629 / €150,912). Differences under ~€3k on 10 weeks are noise. Keep a change only if margin rises on both sets and every week stays ≥ 91% on time. Then log it in `LESSONS.md`.
+Compare with `l8_early`: €134,315 on the tuning weeks, €144,272 on `l8x`, €156,651 on `l8y` (`l8_lane`: €132,001 / €140,942 / €155,720). Differences under ~€3k on 10 weeks are noise. Keep a change only if margin rises on both sets and every week stays ≥ 91% on time. Then log it in `LESSONS.md`.
 
-## Status (Sat 14 Nov, 23:20)
+## Status (Sun 15 Nov, 00:10)
 
 | Level 8 | Margin per week | Orders per week |
 |---|---|---|
@@ -172,7 +173,8 @@ Compare with `l8_lane`: €132,001 on the tuning weeks, €140,942 on `l8x`, €
 | `l8_chain`, test final Sat 20:00 (live, full week) | €12,963, 97.6% on time: rank 41 of 75 (10th €16,623, 1st €19,592) | 334 (10th: 393) |
 | `l8_notes`, 30 test weeks | €13,688 (+4.0%), worst week 93.8% on time | ~350 |
 | `l8_charge`, 30 test weeks | €13,975 (+2.1%), worst week 92.9% on time | ~350 |
-| **`l8_lane`**, 30 test weeks | **€14,289** (+2.2%), worst week 93.7% on time | ~355 |
+| `l8_lane`, 30 test weeks | €14,289 (+2.2%), worst week 93.7% on time | ~355 |
+| **`l8_early`**, 30 test weeks | **€14,508** (+1.5%), worst week 92.9% on time | ~360 |
 | **`l8_notes`**, ranking round "Saturday 21:00" | **€13,912**, worst week 95.0% (€69,561 for 5 weeks, **rank 26 of 40**; 10th €83,479, 1st €105,424) | 361 |
 
 **The gap is volume at the same margin:** the top 10 won 390–500 orders at €41–49 each in the 20:00 test final; we won 334 at €38.8. Every way we tried to win more (cheaper prices, long trips, a narrower backlog brake) raised our cost per car, because drivers are scarce at level 8 (Exp. 45). The biggest lever is still driver cost: a shared car costs 0.77× its typical fee, a car alone 1.06×, and 42% of our cars still go alone. Details and next steps: [PROGRESS.md](PROGRESS.md).

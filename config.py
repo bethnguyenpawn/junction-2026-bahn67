@@ -100,6 +100,8 @@ class Params:
     night_hold: int = 0  # Exp. 48 (worse): count raise_every_min only in reading hours (07-23)
     slow_every_min: int = 0  # Exp. 57 (worse): raise this often when every car has >= slow_after_h to its last pickup
     slow_after_h: float = 12.0
+    early_cut: float = 0.0  # Exp. 64: x typical off the opening fee of a gig whose first car is ready >= early_h
+    early_h: float = 12.0  # hours from now (same cap): drivers who know they work tomorrow book such gigs at once
 
     # --- Notes (Exp. 49): 1 = notes.py reads ready time, deadline, closing time, plates and manual gearbox from the
     # dealer's note (right on all 5,790 noted cars of cached weeks); 0 = the starter's keyword matcher.
@@ -248,6 +250,10 @@ PRESETS["l8_charge"] = replace(PRESETS["l8_notes"], charge_km=200)
 # Exp. 61: fees built on the lane's mean typical fee (fees.json, analysis/typical.py) instead of the request's noisy
 # one (~11% noise per request; drivers book by their own cost). +€9.4k over 30 weeks (+2.2%), worst 93.7%.
 PRESETS["l8_lane"] = replace(PRESETS["l8_charge"], fee_lane=1)
+
+# Exp. 64: a gig whose first car is ready 12 h or more from now opens at 0.7x instead of 0.8x (same cap): drivers who
+# know they work tomorrow book it at once. +€6.6k over 30 weeks (+1.5%), worst 92.9%. early_cut=0.2: -€13.9k on l8 + l8x.
+PRESETS["l8_early"] = replace(PRESETS["l8_lane"], early_cut=0.1)
 
 PRESETS["l8_guarded"] = replace(
     PRESETS["l8"], opt=1, opt_backlog=0.04, opt_guard_late=0.08, opt_guard_backlog=3, opt_delta_cap=0.06

@@ -3,8 +3,8 @@
     python main.py --level 1 --seed l1-a [--set open_mult=0.9 ...]
     python main.py --final
 
-    python main.py --board --level 8 --preset l8_lane   # one RANKING run: counts on the practice leaderboard
-    python main.py --world WORLD_ID --preset l8_lane    # continue a world that stopped (e.g. a server restart)
+    python main.py --board --level 8 --preset l8_early   # one RANKING run: counts on the practice leaderboard
+    python main.py --world WORLD_ID --preset l8_early    # continue a world that stopped (e.g. a server restart)
 
 A ranking run plays the next secret week of the current round (5 per level per round, each once).
 It can't be revealed or forked, and deleting it doesn't remove it, so we never auto-delete one.
