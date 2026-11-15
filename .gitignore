@@ -1,0 +1,54 @@
+# Secrets: the team key must never be committed
+.env
+.env.*
+!.env.example
+*.key
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.python-version
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyright/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.ipynb_checkpoints/
+
+# TypeScript kit, if anyone runs it
+node_modules/
+bun.lockb
+
+# Organisers' kit downloads and unpacked sources (install via requirements.txt instead)
+kit/
+
+# Large or regenerable run data (results/log.jsonl stays tracked)
+results/raw/
+reveal-*/
+*.log
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
